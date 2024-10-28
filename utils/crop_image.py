@@ -1,6 +1,6 @@
 import cv2
 
-def get_cut_frame_from_video(path: str, frame_number: int, part : int = 1):
+def get_crop_frame_from_video(path: str, frame_number: int, part : int = 1):
     width_start, width_end, height_start, height_end = 0, 479, 0, 359
     if (part == 1):
         width_start, width_end, height_start, height_end = 0, 479, 0, 359
@@ -26,9 +26,9 @@ def get_cut_frame_from_video(path: str, frame_number: int, part : int = 1):
     # cap.release()
     return (frame, frame_number)
 
-def get_cut_frame_from_frame(frame, part : int = 1):
+def get_crop_frame_from_frame(frame, part : int = 1):
     width_start, width_end, height_start, height_end = 0, 479, 0, 359
-    if part == 1:
+    if (part == 1):
         width_start, width_end, height_start, height_end = 0, 479, 0, 359
     elif part == 2:
         width_start, width_end, height_start, height_end = 806, 1280, 0, 359
@@ -41,7 +41,7 @@ def get_cut_frame_from_frame(frame, part : int = 1):
 
     return (frame)
 
-def cut_image(path: str):
+def crop_image(path: str):
     cv2.namedWindow('setting')
     cap = cv2.VideoCapture(path)
 
