@@ -28,7 +28,7 @@ def get_cut_frame_from_video(path: str, frame_number: int, part : int = 1):
 
 def get_cut_frame_from_frame(frame, part : int = 1):
     width_start, width_end, height_start, height_end = 0, 479, 0, 359
-    if (part == 1):
+    if part == 1:
         width_start, width_end, height_start, height_end = 0, 479, 0, 359
     elif part == 2:
         width_start, width_end, height_start, height_end = 806, 1280, 0, 359
@@ -61,7 +61,7 @@ def cut_image(path: str):
     cv2.createTrackbar('height_end', 'setting', height, height, nothing)
     cv2.createTrackbar('width_end', 'setting', width, width, nothing)
 
-    while True:
+    while cv2.getWindowProperty('setting', 0) >= 0:
         success, frame = cap.read()
         if not success:
             # restart video
@@ -76,7 +76,7 @@ def cut_image(path: str):
 
         cropped_frame = frame[height_start:height_end, width_start:width_end]
 
-        cv2.imshow("frame", cropped_frame)
+        cv2.imshow("setting", cropped_frame)
 
         key = cv2.waitKey(10) & 0xFF
         if key == ord('q'):
@@ -89,14 +89,14 @@ if __name__ == '__main__':
     i = 500
     path = '../materials_part1/1.mkv'
     cam = cv2.VideoCapture(path)
-    while (True):
+    cv2.namedWindow('test')
+    while cv2.getWindowProperty('test', 0) >= 0:
+        # keyCode = cv2.waitKey(50)
         success, frame = cam.read()
-        if (success == False):
+        if success == False:
             cam.release()
             cam = cv2.VideoCapture(path)
-
             continue
         frame = get_cut_frame_from_frame(frame, 3)
-
-        cv2.imshow("frame", frame)
+        cv2.imshow("test", frame)
         cv2.waitKey(10)
