@@ -86,8 +86,17 @@ def cut_image(path: str):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    i = 0
+    i = 500
     path = '../materials_part1/1.mkv'
-    while True:
-        frame, i = get_cut_frame_from_video(path, i, 1)
-        cv2.imshow('frame', frame)
+    cam = cv2.VideoCapture(path)
+    while (True):
+        success, frame = cam.read()
+        if (success == False):
+            cam.release()
+            cam = cv2.VideoCapture(path)
+
+            continue
+        frame = get_cut_frame_from_frame(frame, 3)
+
+        cv2.imshow("frame", frame)
+        cv2.waitKey(10)
