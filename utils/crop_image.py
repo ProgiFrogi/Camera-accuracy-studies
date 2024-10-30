@@ -97,6 +97,6 @@ if __name__ == '__main__':
             cam.release()
             cam = cv2.VideoCapture(path)
             continue
-        frame = get_cut_frame_from_frame(frame, 3)
+        frame = get_crop_frame_from_frame(frame, 3)
         cv2.imshow("test", frame)
-        cv2.waitKey(10)
+        cv2.waitKey(1)
