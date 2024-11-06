@@ -1,0 +1,4 @@
+camera 1: right camera
+camera 2: mono camera
+camera 3: main camera in center
+camera 5: left camera

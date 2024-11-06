@@ -1,18 +1,18 @@
 import cv2
 import numpy as np
-from utils import get_crop_frame_from_frame
+from utils import get_cut_frame_from_frame
 from cv2 import aruco
 
 # Setting of camera
 camera_matrix = np.array(
-        [[800,   0,  640],
-                [0,   800, 360],
-                [0,     0,  1]], dtype=np.float64)
+    [[800, 0, 640],
+     [0, 800, 360],
+     [0, 0, 1]], dtype=np.float64)
 dist_coeffs = np.array([0, 0, 0, 0, 0], dtype=np.float64)
 
-def get_camera_position(image, dictionary, parameters, camera_matrix, dist_coeffs, marker_length):
+def get_camera_position(img, dictionary, parameters, camera_matrix, dist_coeffs, marker_length):
     '''
-    :param image - input image:
+    :param img - input img:
     :param dictionary - dict ArUco markers:
     :param parameters - params of ArUco marker detector:
     :param camera_matrix - camera calibration matrix :
@@ -21,7 +21,7 @@ def get_camera_position(image, dictionary, parameters, camera_matrix, dist_coeff
     :return: frame
     '''
     detector = cv2.aruco.ArucoDetector(dictionary, parameters)
-    markerCorners, markerIds, _ = detector.detectMarkers(image)
+    markerCorners, markerIds, _ = detector.detectMarkers(img)
 
     if markerIds is not None:
         obj_points = np.array([
@@ -42,12 +42,12 @@ def get_camera_position(image, dictionary, parameters, camera_matrix, dist_coeff
 
                 print(f"Положение камеры относительно метки {markerIds[i]}: {camera_position}")
 
-                cv2.drawFrameAxes(image, camera_matrix, dist_coeffs, rvec, tvec, marker_length / 2)
+                cv2.drawFrameAxes(img, camera_matrix, dist_coeffs, rvec, tvec, marker_length / 2)
 
-        return image
+        return img
     else:
         print("Метки не найдены.")
-        return image
+        return img
 
 def get_cam_position_from_mark(path, marker_length = 0.27, aruco_type = aruco.DICT_5X5_1000, part=1):
 
@@ -61,21 +61,22 @@ def get_cam_position_from_mark(path, marker_length = 0.27, aruco_type = aruco.DI
         if not success:
             cam.release()
             cam = cv2.VideoCapture(path)
-        frame = get_crop_frame_from_frame(frame, part)
+        frame = get_cut_frame_from_frame(frame, part)
         output_image = get_camera_position(frame, dictionary, parameters, camera_matrix, dist_coeffs, marker_length)
 
         cv2.imshow("Detected Markers", output_image)
         cv2.waitKey(1)
 
-def get_markerB_position_from_markerA(markerA_id, markerB_id,
-                                      image,
-                                      dictionary, parameters,
+def get_markerB_position_from_markerA(marker_A_id, marker_B_id,
+                                      image, aruco_type,
                                       camera_matrix, dist_coeffs,
                                       marker_length):
+    dictionary = aruco.getPredefinedDictionary(aruco_type)
+    parameters = aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(dictionary, parameters)
-    markerCorners, markerIds, _ = detector.detectMarkers(image)
+    marker_corners, marker_ids, _ = detector.detectMarkers(image)
 
-    if markerIds is not None and markerA_id in markerIds and markerB_id in markerIds:
+    if marker_ids is not None and marker_A_id in marker_ids and marker_B_id in marker_ids:
         obj_points = np.array([
             [-marker_length / 2, marker_length / 2, 0],
             [marker_length / 2, marker_length / 2, 0],
@@ -84,15 +85,15 @@ def get_markerB_position_from_markerA(markerA_id, markerB_id,
         ], dtype=np.float64)
 
         # Get tvec and rvec for marker A
-        index_A = np.where(markerIds == markerA_id)[0][0]
+        index_A = np.where(marker_ids == marker_A_id)[0][0]
         success_A, rvec_A, tvec_A = cv2.solvePnP(
-            obj_points, markerCorners[index_A][0], camera_matrix, dist_coeffs
+            obj_points, marker_corners[index_A][0], camera_matrix, dist_coeffs
         )
 
         # Get tvec and rvec for marker B
-        index_B = np.where(markerIds == markerB_id)[0][0]
+        index_B = np.where(marker_ids == marker_B_id)[0][0]
         success_B, rvec_B, tvec_B = cv2.solvePnP(
-            obj_points, markerCorners[index_B][0], camera_matrix, dist_coeffs
+            obj_points, marker_corners[index_B][0], camera_matrix, dist_coeffs
         )
 
         if success_A and success_B:
@@ -124,10 +125,10 @@ def output_get_marker5_position_from_marker0():
             cam.release()
             cam = cv2.VideoCapture(path)
             continue
-        frame = get_crop_frame_from_frame(frame, 1)
-        position_relative = get_markerB_position_from_markerA(0, 5, frame, dictionary, parameters, camera_matrix, dist_coeffs, marker_length)
+        frame = get_cut_frame_from_frame(frame, 1)
+        position_relative = get_markerB_position_from_markerA(0, 5, frame, cv2.aruco.DICT_5X5_1000, camera_matrix, dist_coeffs, marker_length)
         print(f'Позиция второй метки относительно первой:{position_relative}')
-        position_relative = get_markerB_position_from_markerA(5, 0, frame, dictionary, parameters, camera_matrix,
+        position_relative = get_markerB_position_from_markerA(5, 0, frame, cv2.aruco.DICT_5X5_1000, camera_matrix,
                                                               dist_coeffs, marker_length)
         print(f'Позиция первой метки относительно второй:{position_relative}')
         cv2.imshow('frame', frame)
@@ -136,4 +137,8 @@ def output_get_marker5_position_from_marker0():
 
 if __name__ == "__main__":
     path = '../materials_part1/1.mkv'
+    img = cv2.VideoCapture(path)
+    img = img.read()
+
     output_get_marker5_position_from_marker0()
+
