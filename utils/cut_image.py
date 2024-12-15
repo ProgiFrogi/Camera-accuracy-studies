@@ -1,6 +1,6 @@
 import cv2
 
-def get_crop_frame_from_video(path: str, frame_number: int, part : int = 1):
+def get_cut_frame_from_video(path: str, frame_number: int, part : int = 1):
     width_start, width_end, height_start, height_end = 0, 479, 0, 359
     if (part == 1):
         width_start, width_end, height_start, height_end = 0, 479, 0, 359
@@ -26,8 +26,8 @@ def get_crop_frame_from_video(path: str, frame_number: int, part : int = 1):
     # cap.release()
     return (frame, frame_number)
 
-def get_crop_frame_from_frame(frame, part : int = 1):
-    width_start, width_end, height_start, height_end = 0, 479, 0, 359
+def get_cut_frame_from_frame(frame, part : int = 1):
+    width_start, width_end, height_start, height_end = 0, 0, 0, 0
     if (part == 1):
         width_start, width_end, height_start, height_end = 0, 479, 0, 359
     elif part == 2:
@@ -39,9 +39,9 @@ def get_crop_frame_from_frame(frame, part : int = 1):
 
     frame = frame[height_start:height_end, width_start:width_end]
 
-    return (frame)
+    return frame
 
-def crop_image(path: str):
+def cut_image(path: str):
     cv2.namedWindow('setting')
     cap = cv2.VideoCapture(path)
 
@@ -86,7 +86,7 @@ def crop_image(path: str):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    i = 500
+    i = 0
     path = '../materials_part1/1.mkv'
     cam = cv2.VideoCapture(path)
     cv2.namedWindow('test')
