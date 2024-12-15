@@ -97,11 +97,11 @@ def get_bird_vision(image):
 
 
 if __name__ == '__main__':
-    input_video_path = 'video_cuted/4_right_up_cut.mp4'
-    output_video_path = 'video/4_right_up_processed_last.mp4'
+    input_video_path = "F:\\Videos\\2024-11-18 17-49-57.mkv"#"F:\\Videos\\2024-11-18 17-59-05.avi"
+    output_video_path = 'tmp/4_right_up_processed_last.mp4'
 
     cap = cv2.VideoCapture(input_video_path)
-
+    from utils.cut_image import get_cut_frame_from_frame
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -114,6 +114,7 @@ if __name__ == '__main__':
         ret, image = cap.read()
         if not ret:
             break
+        image = get_cut_frame_from_frame(image,1)
 
         flag, clustered_frame = get_bird_vision(image)
         #print(type(clustered_frame), np.size(clustered_frame))

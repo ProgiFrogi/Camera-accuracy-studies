@@ -249,86 +249,96 @@ def nearest_point(target_point , points):
 
 
 
+if __name__=="__main__":
+    from utils.cut_image import get_cut_frame_from_frame
+    # image = cv2.imread("tmp/small_field_image.png")
+    input_video_path = "F:\\Videos\\2024-11-18 17-48-26.mkv"#"F:\\Videos\\2024-11-18 17-59-05.avi"
 
-image = cv2.imread("picture/4_right_up_cut.jpg")
+    cap = cv2.VideoCapture(input_video_path)
 
-Detector = Main_Line_detect(image)
-Main_Line = Detector.detect()
-Main_Line.draw(image, color = (0,255,0))
-Detector = Long_lines(image)
-line1,line2 = Detector.detect()
-line1.draw(image, color = (255,0,0))
-line2.draw(image, color = (255,0,0))
+    ret, image = cap.read()
+    for i in range(10):
+        ret,image = cap.read()
 
+    image = get_cut_frame_from_frame(image,4)
 
-#дальше идет какой-то бред
-angels = []
-
-points1 = intersections_clusters(Main_Line,line1)
-points2 = intersections_clusters(Main_Line,line2)
-
-points1 = list((filter(Corrcet(image).point, points1)))
-points2 = list((filter(Corrcet(image).point, points2)))
-
-draw_point(image, points1)
-draw_point(image, points2)
-draw_center(image, points1)
-draw_center(image, points2)
+    Detector = Main_Line_detect(image)
+    Main_Line = Detector.detect()
+    Main_Line.draw(image, color = (0,255,0))
+    Detector = Long_lines(image)
+    line1,line2 = Detector.detect()
+    line1.draw(image, color = (255,0,0))
+    line2.draw(image, color = (255,0,0))
 
 
-img_for_print = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
-cv2.imshow('Cluster', img_for_print)
-cv2.waitKey()
+    #дальше идет какой-то бред
+    angels = []
 
-height, width, _ = image.shape
+    points1 = intersections_clusters(Main_Line,line1)
+    points2 = intersections_clusters(Main_Line,line2)
 
-#-------------------------------------------------------------------------------------------------
-up_points = point_on_height_line(line1) + point_on_height_line(line2)
-down_points = intersections_clusters(line1, Main_Line) + intersections_clusters(line2, Main_Line)
-left_up_point = (min(up_points), 0)
-right_up_point = (max(up_points), 0)
-right_down_point = nearest_point([width, height], down_points)
-left_down_point = nearest_point([0, height], down_points)
-#-------------------------------------------------------------------------------------------------
+    points1 = list((filter(Corrcet(image).point, points1)))
+    points2 = list((filter(Corrcet(image).point, points2)))
 
-conv = lambda my_list: (my_list[0], my_list[1])
-src_points = [left_up_point, right_up_point, conv(right_down_point),conv(left_down_point) ] #первые две фиксированы
-
-# Координаты, куда мы хотим проецировать эти точки (вид сверху)
-# Обычно задаётся прямоугольником
-print(width, height)
-width = int(right_down_point[0] - left_down_point[0])
-dst_points = [(0, 0), (width, 0), (width, height),(0, height) ]
+    draw_point(image, points1)
+    draw_point(image, points2)
+    draw_center(image, points1)
+    draw_center(image, points2)
 
 
-output_size = (width, height)  # Ширина x Высота
+    img_for_print = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
+    cv2.imshow('Cluster', img_for_print)
+    cv2.waitKey()
 
-# Выполняем преобразование
-image = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
+    height, width, _ = image.shape
 
-#увеличиваем контраст изображения
-contrast = 5
-brightness = int(round(255*(1-contrast)/2))
-image = cv2.addWeighted(image, contrast, image, 0, brightness)
+    #-------------------------------------------------------------------------------------------------
+    up_points = point_on_height_line(line1) + point_on_height_line(line2)
+    down_points = intersections_clusters(line1, Main_Line) + intersections_clusters(line2, Main_Line)
+    left_up_point = (min(up_points), 0)
+    right_up_point = (max(up_points), 0)
+    right_down_point = nearest_point([width, height], down_points)
+    left_down_point = nearest_point([0, height], down_points)
+    #-------------------------------------------------------------------------------------------------
 
-#а вот ту может для надежности просто все точки все-таки искать?
-Detector = Last_line(image)
-cluster = Detector.detect()
-cluster.draw(image, color = (0,255,0))
+    conv = lambda my_list: (my_list[0], my_list[1])
+    src_points = [left_up_point, right_up_point, conv(right_down_point),conv(left_down_point) ] #первые две фиксированы
 
-left, right = left_and_right_point(image, cluster)
+    # Координаты, куда мы хотим проецировать эти точки (вид сверху)
+    # Обычно задаётся прямоугольником
+    print(width, height)
+    width = int(right_down_point[0] - left_down_point[0])
+    dst_points = [(0, 0), (width, 0), (width, height),(0, height) ]
 
-src_points = [(0, left), (width, right), (width, height),(0, height) ]
-dst_points = [(0, 0), (width, 0), (width, height),(0, height) ]
-output_size = (width, height)
-image = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
 
-# Сохраняем и показываем результат
-top_view_image = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
-cv2.imshow('Cluster', top_view_image)
-cv2.waitKey()
+    output_size = (width, height)  # Ширина x Высота
 
-cv2.destroyAllWindows()
+    # Выполняем преобразование
+    image = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
+
+    #увеличиваем контраст изображения
+    contrast = 5
+    brightness = int(round(255*(1-contrast)/2))
+    image = cv2.addWeighted(image, contrast, image, 0, brightness)
+
+    #а вот ту может для надежности просто все точки все-таки искать?
+    Detector = Last_line(image)
+    cluster = Detector.detect()
+    cluster.draw(image, color = (0,255,0))
+
+    left, right = left_and_right_point(image, cluster)
+
+    src_points = [(0, left), (width, right), (width, height),(0, height) ]
+    dst_points = [(0, 0), (width, 0), (width, height),(0, height) ]
+    output_size = (width, height)
+    image = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
+
+    # Сохраняем и показываем результат
+    top_view_image = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
+    cv2.imshow('Cluster', top_view_image)
+    cv2.waitKey()
+
+    cv2.destroyAllWindows()
 
 
 

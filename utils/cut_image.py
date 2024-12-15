@@ -1,5 +1,22 @@
 import cv2
 
+
+def get_cut_frame_from_frame(frame, part : int = 1):
+    width_start, width_end, height_start, height_end = 0, 0, 0, 0
+    if (part == 1):
+        width_start, width_end, height_start, height_end = 0, 716, 0, 537
+    elif part == 2:
+        width_start, width_end, height_start, height_end =  1206, 1920, 0, 537
+    elif part == 3:
+        width_start, width_end, height_start, height_end = 0, 723, 538, 1080
+    elif part == 4:
+        width_start, width_end, height_start, height_end = 1206, 1920, 538, 1080
+
+    frame = frame[height_start:height_end, width_start:width_end]
+
+    return frame
+
+
 def get_cut_frame_from_video(path: str, frame_number: int, part : int = 1):
     width_start, width_end, height_start, height_end = 0, 479, 0, 359
     if (part == 1):
@@ -26,20 +43,20 @@ def get_cut_frame_from_video(path: str, frame_number: int, part : int = 1):
     # cap.release()
     return (frame, frame_number)
 
-def get_cut_frame_from_frame(frame, part : int = 1):
-    width_start, width_end, height_start, height_end = 0, 0, 0, 0
-    if (part == 1):
-        width_start, width_end, height_start, height_end = 0, 479, 0, 359
-    elif part == 2:
-        width_start, width_end, height_start, height_end = 806, 1280, 0, 359
-    elif part == 3:
-        width_start, width_end, height_start, height_end = 0, 477, 362, 720
-    elif part == 4:
-        width_start, width_end, height_start, height_end = 806, 1280, 364, 720
-
-    frame = frame[height_start:height_end, width_start:width_end]
-
-    return frame
+# def get_cut_frame_from_frame(frame, part : int = 1):
+#     width_start, width_end, height_start, height_end = 0, 0, 0, 0
+#     if (part == 1):
+#         width_start, width_end, height_start, height_end = 0, 479, 0, 359
+#     elif part == 2:
+#         width_start, width_end, height_start, height_end = 806, 1280, 0, 359
+#     elif part == 3:
+#         width_start, width_end, height_start, height_end = 0, 477, 362, 720
+#     elif part == 4:
+#         width_start, width_end, height_start, height_end = 806, 1280, 364, 720
+#
+#     frame = frame[height_start:height_end, width_start:width_end]
+#
+#     return frame
 
 def cut_image(path: str):
     cv2.namedWindow('setting')
@@ -97,6 +114,6 @@ if __name__ == '__main__':
             cam.release()
             cam = cv2.VideoCapture(path)
             continue
-        frame = get_crop_frame_from_frame(frame, 3)
+        frame = get_cut_frame_from_frame(frame, 3)
         cv2.imshow("test", frame)
         cv2.waitKey(10)

@@ -1,7 +1,7 @@
 import cv2
 import numpy
 
-import crop_image
+import cut_image
 
 
 def isOpen(name: str) -> bool:
