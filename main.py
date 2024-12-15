@@ -64,12 +64,12 @@ def get_bird_vision(image):
     print(width, height)# Ширина x Высота
 
     # Выполняем преобразование
-    image = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
+    image_help, matrix = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
 
     # увеличиваем контраст изображения
     contrast = 5
     brightness = int(round(255 * (1 - contrast) / 2))
-    image_help = cv2.addWeighted(image, contrast, image, 0, brightness)
+    image_help = cv2.addWeighted(image_help, contrast, image_help, 0, brightness)
 
 
     Detector = Last_line(image_help)
@@ -78,18 +78,22 @@ def get_bird_vision(image):
         bad_height += 1
         print("fail")
         return False, 0
-    clusters[0].draw(image, color=(0, 255, 0)) # тут нужно что-то другое
+    #clusters[0].draw(image, color=(0, 255, 0)) # тут нужно что-то другое
 
-    right, left = left_and_right_point(image, clusters)
+    matrix = np.linalg.inv(matrix)
+    right, left = left_and_right_point(image_help, clusters)
     print(left, right, "координаты сбоку")
+    point_l = inverse([0, left], matrix)
+    point_r = inverse([width, right], matrix)
+    print(point_l , point_r, "координаты сбоку но в старой картинке")
+    cv2.line(image, (int(point_l[0]), int(point_l[1])), (int(point_r[0]), int(point_r[1])), (0, 255, 0), 5)
 
-    src_points = [(0, left), (width, right), (width, height), (0, height)]
-    dst_points = [(0, 0), (1200, 0), (1200, 1600), (0, 1600)]
-    output_size = (1200, 1600)
-    image = warp_perspective_to_top_view(image, src_points, dst_points, output_size)
 
-    # Сохраняем и показываем результат
-    #top_view_image = cv2.resize(image, (0, 0), fx=0.5, fy=0.5)
+    img_for_print = cv2.resize(image, (0, 0), fx=0.5, fy=0.5)
+    cv2.imshow('Cluster', img_for_print)
+    cv2.waitKey()
+
+
     print(np.shape(image), "fff")
 
     return True, image

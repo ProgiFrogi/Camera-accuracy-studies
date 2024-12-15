@@ -136,6 +136,14 @@ def warp_perspective_to_top_view(image, src_points, dst_points, output_size):
     # Применяем преобразование к изображению
     warped_image = cv2.warpPerspective(image, matrix, output_size)
     return warped_image, matrix
+
+def inverse(point, matrix):
+    point_img2_homogeneous = np.array([point[0], point[1], 1])
+    point_img1_homogeneous = np.dot(matrix, point_img2_homogeneous)
+    x = point_img1_homogeneous[0] / point_img1_homogeneous[2]
+    y = point_img1_homogeneous[1] / point_img1_homogeneous[2]
+    return np.array([x, y])
+
 def intersection(line1, line2):
     a1, b1, c1 = line1
     a2, b2, c2 = line2
