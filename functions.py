@@ -4,7 +4,48 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import HDBSCAN, DBSCAN
 from mpl_toolkits import mplot3d
 import numpy as np
+
 import sys
+
+def draw_cluster(image, clusters, filt = None):
+    for cluster in clusters:
+        if filt == None:
+            #print("OK")
+            cluster.draw(image)
+            continue
+        if filt(cluster):
+            #print("OK")
+            cluster.draw(image)
+def point_on_height_line(cluster):
+    func = lambda line: -line.c/line.a
+    points = [func(line) for line in cluster.lines]
+    return points
+
+def left_and_right_point(image, clusters):
+    height, width, _ = image.shape
+    right_m, left_m = 2000, 2000
+    for cluster in clusters:
+        func = lambda line: -line.c / line.b
+        left = min([func(line) for line in cluster.lines])
+        left_m = min(left, left_m)
+
+        func = lambda line: -(line.c + line.a*height)/ line.b
+        right = min([func(line) for line in cluster.lines])
+        right_m = min(right, right_m)
+
+
+    return right_m, left_m
+
+def nearest_point(target_point , points):
+    metric = lambda p1, p2: (p1[0]- p2[0])**2 + (p1[1] - p2[1])**2
+    R_min = 10000000000000
+    nearest = None
+    for point in points:
+        R = metric(target_point, point)
+        if R < R_min:
+            nearest = point
+            R_min = R
+    return nearest
 
 def points_to_param(points):
     x1, y1, x2, y2 = points
@@ -94,7 +135,7 @@ def warp_perspective_to_top_view(image, src_points, dst_points, output_size):
 
     # Применяем преобразование к изображению
     warped_image = cv2.warpPerspective(image, matrix, output_size)
-    return warped_image
+    return warped_image, matrix
 def intersection(line1, line2):
     a1, b1, c1 = line1
     a2, b2, c2 = line2
@@ -219,7 +260,26 @@ class Cluster():
         return self.clusters_params
 
     def __gt__(self, other):
-        if self.l > other.l:
+        maxx = 0
+        l = len(self.clusters_params)
+        for i in range(1,l):
+            for j in range(i):
+                c1 = self.clusters_params[i][2]
+                c2 = self.clusters_params[j][2]
+                maxx = max(abs(c1-c2), maxx)
+
+
+        maxx_other = 0
+        l = len(other.clusters_params)
+        for i in range(1, l):
+            for j in range(i):
+                c1 = other.clusters_params[i][2]
+                c2 = other.clusters_params[j][2]
+                maxx_other = max(abs(c1 - c2), maxx_other)
+        file = open('statistic.txt', 'a')
+        file.write(str(self.l) + " " + str(maxx) + "\n")
+        file.close()
+        if self.l*maxx > other.l*maxx_other:
             return True
         return False
 
@@ -254,3 +314,202 @@ class Corrcet():
             return False
         else:
             return True
+
+
+class line_detect():
+    def __init__(self, image):
+        self.image = image
+        self.rho = 3
+        self.theta = np.pi / (140)
+        self.threshold = 60
+        self.minLineLength = 60
+        self.maxLineGap = 15
+        self.eps_dbscan = 0.0125
+        self.eps_dbscan_for_clusters = 0.0001 / 2.2
+        self.Canny_1 = 80
+        self.Canny_2 = 150
+        self.blur = 5
+
+    def find_lines(self, rgb_image):
+        gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+        blurred_image = cv2.GaussianBlur(gray_image, (self.blur, self.blur), 0)
+        edges = cv2.Canny(blurred_image, self.Canny_1, self.Canny_2)
+        lines = cv2.HoughLinesP(edges,
+                                rho=self.rho,
+                                theta=self.theta,
+                                threshold=self.threshold,
+                                minLineLength=self.minLineLength,
+                                maxLineGap=self.maxLineGap)
+
+        return lines
+
+    def one_line(self, lines):
+        points = []
+        for line in lines:
+            x1, x2, x3, x4 = line[0]
+            points.append([x1, x2, x3, x4])
+        points = np.array(points)
+        dbscan = DBSCAN(eps=self.eps_dbscan, min_samples=1, metric=line_metric)
+        labels = dbscan.fit_predict(points)
+
+        concatenate_lines = {}
+        for i in range(len(lines)):
+            ind = labels[i]
+            if ind in concatenate_lines:
+                concatenate_lines[ind].append(lines[i])
+            else:
+                concatenate_lines[ind] = [lines[i]]
+        lines = [Line(value) for value in concatenate_lines.values()]
+
+        return lines
+
+    def merge_in_clusters(self, lines, criteria=lambda x: True):
+        Line_clusters = []
+        points = []
+        l_arr = []
+        for line in lines:
+            if contour_cords(self.image, line, method='check') and criteria(line):
+                Line_clusters.append(line)
+                points.append(contour_cords(self.image, line))
+                l_arr.append(line.l)
+
+        S = Metric(self.image)
+
+        l_arr = np.array(l_arr).reshape(-1, 1)
+        points = np.array(points) / S.perimetr
+        if len(points) ==0 or len(l_arr) == 0:
+            return False
+        X = np.hstack((points, l_arr))
+        dbscan = DBSCAN(eps=self.eps_dbscan_for_clusters, min_samples=1, metric=S.cluster_metric)
+        labels = dbscan.fit_predict(X)
+        # plt.scatter(points[:, 0], points[:, 1], c=labels)
+        # plt.show()
+
+        concatenate_clusters = {}
+
+        for i in range(len(Line_clusters)):
+            ind = labels[i]
+            if ind in concatenate_clusters:
+                concatenate_clusters[ind].append(Line_clusters[i])
+            else:
+                concatenate_clusters[ind] = [Line_clusters[i]]
+
+        Clusters = [Cluster(lines_dict) for lines_dict in concatenate_clusters.values()]
+
+        return Clusters
+
+    def detect(self):
+        lines = self.find_lines(self.image)
+        lines = self.one_line(lines)
+        Clusters = self.merge_in_clusters(lines)
+        return Clusters
+
+
+# возможно случайно изменил класс, провеить
+class Main_Line_detect(line_detect):
+    def __init__(self, image):
+        super().__init__(image)
+        self.rho = 3
+        self.theta = np.pi / (360)
+        self.threshold = 150
+        self.minLineLength = 100
+        self.maxLineGap = 30
+        self.eps_dbscan = 0.0125
+        self.eps_dbscan_for_clusters = 0.0001 / 4
+
+    def criteria(self, cluster):
+        if len(cluster.lines) != 2:
+            return False
+        return True
+
+    def func(self, line):
+        phi = np.arctan(line.a / line.b)
+        if abs(phi) < np.pi / 20 or abs(phi - np.pi) < np.pi / 20:
+            return True
+        return False
+
+    def detect(self):
+        lines = self.find_lines(self.image)
+        lines = self.one_line(lines)
+        Clusters = self.merge_in_clusters(lines, self.func)
+        Clusters = list(filter(self.criteria, Clusters))
+        Clusters.sort(reverse=True)
+        if len(Clusters) < 1:
+            return None
+
+        return Clusters[0]
+
+
+class Long_lines(line_detect):
+    def __init__(self, image):
+        super().__init__(image)
+        self.rho = 3
+        self.theta = np.pi / (360)
+        self.threshold = 150
+        self.minLineLength = 100
+        self.maxLineGap = 40
+        self.eps_dbscan = 0.025  # 0.02 - 0.03
+        self.eps_dbscan_for_clusters = 0.00004
+        #0.000036  # 0.000032 - 0.000041
+
+    def criteria(self, cluster):
+        if len(cluster.lines) != 2:
+            return False
+        if cluster.max_norm() > 0.08: #0.065
+            return False
+
+        return True
+
+    def detect(self):
+        lines = self.find_lines(self.image)
+        lines = self.one_line(lines)
+
+        def func(line):
+            phi = np.arctan(line.b / line.a)
+            if abs(phi) < np.pi / 5 or abs(phi - np.pi) < np.pi / 5:
+                return True
+            return False
+
+        Clusters = self.merge_in_clusters(lines, func)
+        #draw_cluster(self.image, Clusters)
+        Clusters = list(filter(self.criteria, Clusters))
+        Clusters.sort(reverse=True)
+        if len(Clusters) < 2:
+            return None, None
+
+        return Clusters[0], Clusters[1]
+
+
+class Last_line(Main_Line_detect):
+    def __init__(self, image):
+        super().__init__(image)
+        self.rho = 1
+        self.theta = np.pi / (360)
+        self.threshold = 50
+        self.minLineLength = 150
+        self.maxLineGap = 30
+        self.eps_dbscan = 0.0085
+        self.eps_dbscan_for_clusters = 0.0001 / 4
+
+    def criteria(self, cluster):
+        if len(cluster.lines) != 2:
+            return False
+
+        return True
+
+    def detect(self):
+        lines = self.find_lines(self.image)
+        lines = self.one_line(lines)
+
+        for line in lines:
+            color = (255, 255, 255)
+            #line.print(self.image, color)
+        Clusters = self.merge_in_clusters(lines, self.func)
+        if type(Clusters) == bool:
+            return False
+        Clusters = list(filter(self.criteria, Clusters))
+        if len(Clusters) <1:
+            return False
+
+        Clusters.sort(reverse=True)
+        return Clusters
