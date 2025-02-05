@@ -67,12 +67,12 @@ def rgb_tune_from_params(image,lh,ls,lv,hh,hs,hv):
 
 def rgb_tune_test(path:str):
     cv2.namedWindow('test')
-    cv2.createTrackbar("hr", "test", 60, 255, nothing)
-    cv2.createTrackbar("hg", "test", 28, 255, nothing)
-    cv2.createTrackbar("hb", "test", 57, 255, nothing)
-    cv2.createTrackbar("lr", "test", 168, 255, nothing)
-    cv2.createTrackbar("lg", "test", 255, 255, nothing)
-    cv2.createTrackbar("lb", "test", 255, 255, nothing)
+    cv2.createTrackbar("lr", "test", 60, 255, nothing)
+    cv2.createTrackbar("lg", "test", 28, 255, nothing)
+    cv2.createTrackbar("lb", "test", 57, 255, nothing)
+    cv2.createTrackbar("hr", "test", 168, 255, nothing)
+    cv2.createTrackbar("hg", "test", 255, 255, nothing)
+    cv2.createTrackbar("hb", "test", 255, 255, nothing)
     isclosed = False
     lh = ls=lv=hh=hs=hv =0
     if path.endswith('.mkv'):
