@@ -458,10 +458,11 @@ class EllipseStaticMethods:
         pass
     @staticmethod
     def lstsq(mat,target):
-        a0 = np.matmul(mat.transpose(),mat)
-        a = np.linalg.inv(a0)
-        b = np.matmul(mat.transpose(), target)
-        return np.matmul(a,b)
+        return np.linalg.lstsq(mat,target)[0]
+        # a0 = np.matmul(mat.transpose(),mat)
+        # a = np.linalg.inv(a0)
+        # b = np.matmul(mat.transpose(), target)
+        # return np.matmul(a,b)
 
     @staticmethod
     def find_semi_axis(pt):
