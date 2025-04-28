@@ -1,0 +1,7 @@
+
+build/
+find_ellipse_source.c
+find_ellipse_source.html
+find_ellipse.cpython*
+*.out
+**/*__pycache__*/**

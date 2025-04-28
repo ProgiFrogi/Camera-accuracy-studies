@@ -1,0 +1,12 @@
+include find_ellipse/.gitignore
+
+tmp/
+bin/
+lib/
+lib64/
+lib64
+share/
+etc/
+**/*__pycache__*/**
+*.ipynb_checkpoints
+pyvenv.cfg

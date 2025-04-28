@@ -1,0 +1,3 @@
+apt:
+    liblapacke-dev
+    libopencv-dev
