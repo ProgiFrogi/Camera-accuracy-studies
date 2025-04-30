@@ -63,7 +63,7 @@ def homography_matrix(segs):
 
 
 # homograpy matrix, for transfromation that minimizes sum of distances between each end of segments and line that goes trough center of segment and "horizontal" or "vertical" point at the horizon, where this points represents points to which are all parallel horizontal/vertical lines are converging
-def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False)  :  # ,fov_px,fov_angle):
+def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False,angle_between_lines=math.pi/2)  :  # ,fov_px,fov_angle):
     """
     given 2 horizon points and center of image generates homography matrix that convert image from perspective view to bird-view
 
@@ -71,6 +71,7 @@ def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False
     :param hor_point2: horizon point for horizontal lines
     :param center_pos: center of image
     :param only_points: if True, return only 2 ordered set of points that are converted from on to another
+    :param angle_between_lines: angle(in radians) between "horizontal" and "vertical" lines. in some cases angle=pi/2 may not work and you will need smaller angle
     :return:
     """
     # hereinafter assuming center of image is (0,0), i.e. (0,0) is point through perpendicular from "focal point" is goes
@@ -190,10 +191,10 @@ def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False
         hor_point2 = np.copy(hor_point2)
         hor_point1 -= center_pos
         hor_point2 -= center_pos
-        print("hor points: ", hor_point1, hor_point2)
+        # print("hor points: ", hor_point1, hor_point2)
         p3 = calculate_p3(hor_point1, hor_point2)
-        distance = find_distance_fp_to_plane_v2(hor_point1, hor_point2, p3, angle=math.pi / 180 * 87)
+        distance = find_distance_fp_to_plane_v2(hor_point1, hor_point2, p3, angle=angle_between_lines)
         angle = angle_of_camera_v1(distance, p3)
         assert (abs(angle) > 1e-5)
-        print(distance, angle)
+        # print(distance, angle)
         return homography_matrix_internal(hor_point1, angle, 0.4, p3, distance)
