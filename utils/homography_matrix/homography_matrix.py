@@ -112,8 +112,11 @@ def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False
                 ( a *b  )  # len of perpendicular to hypotenuse is sqrt of multiplication of projections of sides onto hypotenuse
         if debug:
             print("h and p3" ,h, (np.linalg.norm(p3)), (p3))
-        ans = math.sqrt(h ** 2 - np.linalg.norm(
-            p3) ** 2)  # h is distance from p3 to focal point, because this line is not necessary perpendicular to focal plane and line that goes through center is, this step is needd
+        anssq = h**2-np.linalg.norm(p3)**2
+        if anssq<0:
+            try_angle = math.acos(np.dot(p1,p2)/np.linalg.norm(p1)/np.linalg.norm(p2))
+            raise RuntimeError(f"sqrt of negative number {anssq}. try changing expected angle to smaller one,for example rad. {try_angle}")
+        ans = math.sqrt(anssq)  # h is distance from p3 to focal point, because this line is not necessary perpendicular to focal plane and line that goes through center is, this step is needd
         return ans
 
     def calculate_p3(p1, p2):
