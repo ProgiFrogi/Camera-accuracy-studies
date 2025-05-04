@@ -71,6 +71,8 @@ def metric_by_mask(x_0, y_0, a, b, angle, data, width: int = 20,debug=False):
     mask = cv2.ellipse(np.zeros(data.shape).astype(np.uint8),[int(x_0),int(y_0)],[int(a),int(b)],angle,0,360,255,width)
     metric = np.sum(data[mask].astype(int))
     ellipse_perimeter = math.sqrt(a*a+b*b)# O(ellipse_perimeter_approximation)
+    if a==0 or b == 0:
+        return -float("inf")
     metric/=ellipse_perimeter
     if debug:
         print(metric/max_point,a,b)
