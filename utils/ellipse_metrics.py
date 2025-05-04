@@ -56,7 +56,7 @@ def metric_by_points_(x_0, y_0, a, b, angle, data, n: int = 20):
         return cntr 
     return ans + cntr
 
-def metric_by_mask(x_0, y_0, a, b, angle, data, width: int = 20):
+def metric_by_mask(x_0, y_0, a, b, angle, data, width: int = 20,debug=False):
     """
     this function constructs mask with form of ellipse,applies it to data and computes all white pixels
     this function cannot be used as loss
@@ -72,7 +72,8 @@ def metric_by_mask(x_0, y_0, a, b, angle, data, width: int = 20):
     metric = np.sum(data[mask].astype(int))
     ellipse_perimeter = math.sqrt(a*a+b*b)# O(ellipse_perimeter_approximation)
     metric/=ellipse_perimeter
-    print(metric/max_point,a,b)
+    if debug:
+        print(metric/max_point,a,b)
     return metric/max_point
     
 

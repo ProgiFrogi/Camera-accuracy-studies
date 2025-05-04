@@ -63,7 +63,7 @@ def homography_matrix(segs):
 
 
 # homograpy matrix, for transfromation that minimizes sum of distances between each end of segments and line that goes trough center of segment and "horizontal" or "vertical" point at the horizon, where this points represents points to which are all parallel horizontal/vertical lines are converging
-def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False,angle_between_lines=math.pi/2)  :  # ,fov_px,fov_angle):
+def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False,angle_between_lines=math.pi/2,debug=False)  :  # ,fov_px,fov_angle):
     """
     given 2 horizon points and center of image generates homography matrix that convert image from perspective view to bird-view
 
@@ -110,8 +110,8 @@ def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False
         else:
             h = math.sqrt \
                 ( a *b  )  # len of perpendicular to hypotenuse is sqrt of multiplication of projections of sides onto hypotenuse
-
-        print("h and p3" ,h, (np.linalg.norm(p3)), (p3))
+        if debug:
+            print("h and p3" ,h, (np.linalg.norm(p3)), (p3))
         ans = math.sqrt(h ** 2 - np.linalg.norm(
             p3) ** 2)  # h is distance from p3 to focal point, because this line is not necessary perpendicular to focal plane and line that goes through center is, this step is needd
         return ans
@@ -169,22 +169,26 @@ def homography_matrix_v2(hor_point1 ,hor_point2 ,center_pos ,only_points = False
         p1r = p1_p_p3r + p1_p_hdirr  # decompose vector into hp3 and hdir, project hdir with scale2(where scale2 computed from sinus theorem and scale), and hp3 with scale of (smth)
 
         cos_rot = np.dot(p1r, np.array((1, 0))) / np.linalg.norm(p1r)
-        sin_rot = math.sqrt(1 - cos_rot ** 2)
-        rot_mat = np.array([[cos_rot, sin_rot], [-sin_rot, cos_rot]])  # todo maybe wrong direction
-
-        print(np.array([hp1, hp2, hp3, hp4]) + center_pos, np.array([hpr1, hpr2, hpr3, hpr4]) + center_pos, rot_mat,
-              angle)
-        hpr1 = rot_mat.dot(hpr1)
-        hpr2 = rot_mat.dot(hpr2)
-        hpr3 = rot_mat.dot(hpr3)
-        hpr4 = rot_mat.dot(hpr4)
+        angle_rot_fin = np.acos(cos_rot)
+        # ----------this changed fo homography_rotate-----------
+        # sin_rot = math.sqrt(1 - cos_rot ** 2)
+        # rot_mat = np.array([[cos_rot, sin_rot], [-sin_rot, cos_rot]])  # todo maybe wrong direction
+        # if debug:
+        #     print(np.array([hp1, hp2, hp3, hp4]) + center_pos, np.array([hpr1, hpr2, hpr3, hpr4]) + center_pos, rot_mat,
+        #       angle)
+        # hpr1 = rot_mat.dot(hpr1)
+        # hpr2 = rot_mat.dot(hpr2)
+        # hpr3 = rot_mat.dot(hpr3)
+        # hpr4 = rot_mat.dot(hpr4)
+        #---------------------------------------
         if only_points:
             return np.array([hp1, hp2, hp3, hp4]) + center_pos, np.array([hpr1, hpr2, hpr3, hpr4]) + center_pos
 
-        return cv2.findHomography(np.array([hp1, hp2, hp3, hp4]) + center_pos,
-                                  np.array([hpr1, hpr2, hpr3, hpr4]) + center_pos)
+        # return cv2.findHomography(np.array([hp1, hp2, hp3, hp4]) + center_pos,
+        #                           np.array([hpr1, hpr2, hpr3, hpr4]) + center_pos)
         # return cv2.findHomography(np.array([hpr1,hpr2,hpr3,hpr4]),np.array([hp1,hp2,hp3,hp4])+400)
-        # return cv2.getPerspectiveTransform(np.array([hp1,hp2,hp3,hp4]),np.array([hpr1,hpr2,hpr3,hpr4]))
+        from .miscancellous import homography_rotate
+        return homography_rotate(-angle_rot_fin)@cv2.getPerspectiveTransform(np.array([hp1,hp2,hp3,hp4]).astype(np.float32)+center_pos.astype(np.float32),np.array([hpr1,hpr2,hpr3,hpr4]).astype(np.float32)+center_pos.astype(np.float32))
 
     if True:
         hor_point1 = np.copy(hor_point1)
