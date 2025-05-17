@@ -1,14 +1,81 @@
 import math
+import numpy as np
+
+
+from scipy.integrate import quad
+
+def ellipse_arc_length(a, b, t):
+    """
+    Calculate the arc length of an ellipse from 0 to t.
+
+    Parameters:
+    a (float): Semi-major axis length.
+    b (float): Semi-minor axis length.
+    t (float): Angle parameter.
+
+    Returns:
+    float: Arc length from 0 to t.
+    """
+    def integrand(theta):
+        return np.sqrt(a**2 * np.sin(theta)**2 + b**2 * np.cos(theta)**2)
+
+    length, _ = quad(integrand, 0, t)
+    return length
+
+def equidistant_points_on_ellipse(x_0,y_0,a, b,angle, num_points):
+    """
+    Find equidistant points on an ellipse based on arc length.
+
+    Parameters:
+    a (float): Semi-major axis length.
+    b (float): Semi-minor axis length.
+    num_points (int): Number of points to generate.
+
+    Returns:
+    list of tuples: List of (x, y) coordinates of the points.
+    """
+    total_length = ellipse_arc_length(a, b, 2 * np.pi)
+    segment_length = total_length / num_points
+
+    points = []
+    current_length = 0
+    t = 0
+
+    for _ in range(num_points):
+        # Find the angle t that corresponds to the current arc length
+        while True:
+            length = ellipse_arc_length(a, b, t)
+            if length >= current_length:
+                break
+            t += 0.001  # Small increment to find the correct t
+
+        x = a * np.cos(t)
+        y = b * np.sin(t)
+        point = (x, y)
+        point = (point[0] * math.cos(angle) + point[1] * math.sin(angle),
+        -point[0] * math.sin(angle) + point[1] * math.cos(angle))
+        point = (point[0] + x_0, point[1] + y_0)
+        points.append(point)
+
+        current_length += segment_length
+
+    return points
+
+
+
+
 def points_on_ellipse(x_0, y_0, a, b, angle, n: int = 10):
     points = list()
-    for i in range(n):
-        point = (math.cos(i / math.pi / 2), math.sin(i / math.pi / 2))
+    for i in np.linspace(0, 2 * np.pi, n, endpoint=False):
+        point = (math.cos(i), math.sin(i))
         point = (point[0] * a, point[1] * b)
         point = (point[0] * math.cos(angle) + point[1] * math.sin(angle),
                  -point[0] * math.sin(angle) + point[1] * math.cos(angle))
         point = (point[0] + x_0, point[1] + y_0)
         points.append(point)
     return points
+
+
 
 
 def points_on_line(from_x, from_y, to_x, to_y):
@@ -70,7 +137,7 @@ def metric_by_mask(x_0, y_0, a, b, angle, data, width: int = 20,debug=False):
     #data/=max_point # this line replaced with /max_point in return statement for optimization
     mask = cv2.ellipse(np.zeros(data.shape).astype(np.uint8),[int(x_0),int(y_0)],[int(a),int(b)],angle,0,360,255,width)
     metric = np.sum(data[mask].astype(int))
-    ellipse_perimeter = math.sqrt(a*a+b*b)# O(ellipse_perimeter_approximation)
+    ellipse_perimeter = ellipse_perimeter_approximation(a,b)
     if a==0 or b == 0:
         return -float("inf")
     metric/=ellipse_perimeter
@@ -90,3 +157,252 @@ def loss_by_points(x_0, y_0, a, b, angle, data, n: int = 20):
     max_point = max(data)#todo:add here nograd or something 
     data/=max_point
     return metric_by_points_(x_0, y_0, a, b, angle, data, n)#todo check case where only cntr returned, try to wrap it into torch.tensor with 0 grad
+
+from collections import deque
+
+def find_path(array, start, end, timeout=2000):
+    """
+    Find a path from start to end in a numpy array, moving only through non-zero elements.
+    
+    Args:
+        array: 2D numpy array where non-zero elements represent passable cells
+        start: Tuple (row, col) representing the starting position
+        end: Tuple (row, col) representing the target position
+    
+    Returns:
+        List of tuples representing the path from start to end, or None if no path exists
+    """
+    rows, cols = array.shape
+    if (start[0] < 0 or start[0] >= rows or start[1] < 0 or start[1] >= cols or
+        end[0] < 0 or end[0] >= rows or end[1] < 0 or end[1] >= cols):
+        return None
+    
+    if array[start] == 0 or array[end] == 0:
+        return None
+    
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    
+    queue = deque()
+    queue.append(start)
+    
+    # Dictionary to keep track of visited cells and their parents
+    visited = {start: None}
+    
+    while queue and timeout>0:
+        timeout-=1
+        current = queue.popleft()
+        
+        # If we've reached the end, reconstruct the path
+        if current == end:
+            path = []
+            while current is not None:
+                path.append(current)
+                current = visited[current]
+            return path[::-1]  # Reverse to get start to end
+        
+        # Explore neighbors
+        for direction in directions:
+            neighbor = (current[0] + direction[0], current[1] + direction[1])
+            
+            # Check if neighbor is within bounds and passable
+            if (0 <= neighbor[0] < rows and 0 <= neighbor[1] < cols and
+                array[neighbor] != 0 and neighbor not in visited):
+                
+                visited[neighbor] = current
+                queue.append(neighbor)
+    
+    # No path found
+    return None
+
+def find_path_length(array, start, end,timeout=2000):
+    """
+    Find the length of the shortest path from start to end in a numpy array, 
+    moving only through non-zero elements.
+    
+    Args:
+        array: 2D numpy array where non-zero elements represent passable cells
+        start: Tuple (row, col) representing the starting position
+        end: Tuple (row, col) representing the target position
+    
+    Returns:
+        Integer representing the path length (number of steps), or -1 if no path exists
+    """
+    # Check if start or end is out of bounds or zero
+    rows, cols = array.shape
+    if (start[0] < 0 or start[0] >= rows or start[1] < 0 or start[1] >= cols or
+        end[0] < 0 or end[0] >= rows or end[1] < 0 or end[1] >= cols):
+        # print("wrong start/end point: out of bounds")
+        return None
+    
+    if array[start] == 0 or array[end] == 0:
+        # print("wrong start/end point")
+        return None
+    
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    
+    queue = deque()
+    queue.append((start, 0))
+    
+    visited = set()
+    visited.add(start)
+    
+    while queue and timeout>0:
+        timeout-=1
+        current, distance = queue.popleft()
+        
+        if current == end:
+            return distance
+        
+        for direction in directions:
+            neighbor = (current[0] + direction[0], current[1] + direction[1])
+            
+            if (0 <= neighbor[0] < rows and 0 <= neighbor[1] < cols and
+                array[neighbor] != 0 and neighbor not in visited):
+                
+                visited.add(neighbor)
+                queue.append((neighbor, distance + 1))
+    
+    # No path found
+    # if timeout<=0:
+    #     print("timeout")
+    return None
+
+def ellipse_perimeter_approximation(a, b):
+    """
+    Calculate approximation of ellipse perimeter.
+
+    Average Errors:
+    Ramanujan: Avg Error = 0.001413%, Max Error = 0.039977%
+    Cantrell: Avg Error = 0.008340%, Max Error = 0.170823%
+    Simple  : Avg Error = 3.842144%, Max Error = 11.072068%
+    Muir    : Avg Error = 0.158268%, Max Error = 1.045971%
+    
+    Args:
+        a: Semi-major axis length
+        b: Semi-minor axis length
+    
+    Returns:
+        Approximate perimeter of the ellipse
+    """
+    def ramanujan(a, b):
+        h = ((a - b)/(a + b))**2
+        return math.pi * (a + b) * (1 + (3*h)/(10 + math.sqrt(4 - 3*h)))
+
+    def cantrell(a, b):
+        h = ((a - b)/(a + b))**2
+        coefs = [1,1/4,1/64,1/256,25/16384]
+        sum_pre_h= 0
+        mul = 1
+        for i in coefs:
+            sum_pre_h+=mul*i
+            mul*=h
+        return math.pi * (a + b) * sum_pre_h
+
+    def simple(a, b):
+        return 2 * math.pi * math.sqrt((a**2 + b**2)/2)
+
+    def muir(a, b):
+        return 2 * math.pi * ((a**1.5 + b**1.5)/2)**(1/1.5)
+    return cantrell(a,b)
+
+    
+
+def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,debug=False):
+    """
+    for each pixel of image that intersects our ellipse we search for nearest white pixel(top k?). then we search white distance between this pixel and previous.
+    if there is no white length,then distance is x.
+    if there is no white point in radius y, then we add z to metric
+    after calculation, we divide sum by ellipse perimeter and apply sigmoid to result: we want to allow some error, i.e. if there is no half of ellipse it is ok if other half is an ellipse, but if it found ellipses on lines we want to strike metric hard for this error
+    """
+    n_point_sample = 1000
+
+    if data is None or len(data.shape)!=2:
+        raise RuntimeError(f"wrong image shape: should be (.,.) but it is {data.shape}")
+    if a==0 or b ==0:
+        return 0
+    def search_point(point,data,max_rad=5):#max search pixel distance
+        point = point.astype(int)
+        for r in range(10):
+            for y in [max(0,-r+point[1]),min(data.shape[1]-1,r+1+point[1])]:
+                for x in range(max(0,-r+point[0]),min(data.shape[0]-1,r+1+point[0])):
+                    if data[x][y] !=0:
+                        return np.array([x,y])
+            for x in [max(0,-r+point[0]),min(data.shape[0]-1,r+1+point[0])]:
+                for x in range(max(0,-r+point[1]),min(data.shape[1]-1,r+1+point[1])):
+                    if data[x][y] != 0:
+                        return np.array([x,y])
+        return None
+    def sigmoid(z):
+        return 1/(1 + np.exp(-z))
+    el_points = points_on_ellipse(x_0,y_0,a,b,angle,n_point_sample)
+    penalty = np.float64(0)
+    prev_point = None
+    prev_p_ell = None
+    no_nearest = 0
+    no_distance = 0
+    for point in el_points:
+        point = np.array(point).astype(int)
+        if (point==prev_p_ell).all():
+            continue
+        current_point = search_point(point,data)
+        if prev_point is None:
+            if current_point is None:
+                no_nearest+=1
+            pass
+        elif current_point is None:
+            # penalty+=4*np.sum(np.abs(prev_p_ell-point))
+            no_nearest+=1
+            # print("bad, not found")
+        else:
+            distance = find_path_length(data,tuple(current_point),tuple(prev_point))
+            # print(distance)
+            if distance is None:
+                # penalty+=2*np.sum(np.abs(prev_p_ell-point))
+                no_distance+=1
+            else:
+                # print(point,current_point)
+                # print(np.abs(np.sum(np.abs(prev_p_ell-point))-np.sum(np.abs(prev_point-current_point))))
+                # print(np.abs(np.sum(np.abs(prev_p_ell-point))-float(distance)))
+                penalty+=max(np.abs(np.sum(np.abs(prev_p_ell-point))-np.sum(np.abs(prev_point-current_point))),
+                np.abs(np.sum(np.abs(prev_p_ell-point))-float(distance)))
+        # print(penalty/((a+b)*4))
+        if current_point is not None:
+            penalty+=np.linalg.norm(point-current_point)
+        prev_p_ell = point
+        if current_point is not None:
+            prev_point = current_point
+    # print(penalty/((a+b)*4))
+    # return 1-sigmoid(penalty/((a+b)*4)-1)
+    if debug:
+        print(f"no_nearest/n_point_sample: {no_nearest/n_point_sample}, no_distance/n_point_sample: {no_distance/n_point_sample},penalty/((a+b)*4): {penalty/((a+b)*4)} ")
+    if no_nearest/n_point_sample>0.8:
+        return -float("inf")
+    return -(penalty/((a+b)*4))-675*(no_nearest/n_point_sample)**3-125*(no_distance/n_point_sample)**3
+
+
+
+if __name__ == "__main__":
+    #test 
+    print('-'*100)
+    print(metric_by_near_segments_base(30,30,10,20,0,np.ones((100,100)).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(20,20,10,20,0,np.zeros((100,100))))
+    print('-'*100)
+    print(metric_by_near_segments_base(20,20,10,20,0,(np.random.rand(100,100)>(np.ones((100,100))*(1-4e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(20,20,10,20,0,(np.random.rand(100,100)>(np.ones((100,100))*(1-4e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(50,50,20,40,0,(np.random.rand(100,100)>(np.ones((100,100))*(1-4e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(50,50,20,40,0,(np.random.rand(100,100)>(np.ones((100,100))*(1-4e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(500,500,200,400,0,(np.random.rand(1000,1000)>(np.ones((1000,1000))*(1-4e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(500,500,400,400,0,(np.random.rand(1000,1000)>(np.ones((1000,1000))*(1-4e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(50,50,40,40,0,(np.random.rand(100,100)>(np.ones((100,100))*(1-9e-1))).astype(int)))
+    print('-'*100)
+    print(metric_by_near_segments_base(50,50,10,10,0,(np.random.rand(100,100)>(np.ones((100,100))*(1e-1))).astype(int)))
+    # print(find_path_length(np.array([[1,1],[1,1]]),(0,0),(1,1)))
+
+    # print(np.sum(np.random.rand(1000,1000)>(np.ones((1000,1000))*(2e0-1e0))).astype(int))
