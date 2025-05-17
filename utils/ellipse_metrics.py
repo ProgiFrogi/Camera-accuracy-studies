@@ -2,62 +2,51 @@ import math
 import numpy as np
 
 
-from scipy.integrate import quad
-
-def ellipse_arc_length(a, b, t):
+def equidistant_ellipse_points(x_0, y_0, a, b,angle, n = 10):
     """
-    Calculate the arc length of an ellipse from 0 to t.
+    Returns approximately n equidistant points on an ellipse.
 
-    Parameters:
-    a (float): Semi-major axis length.
-    b (float): Semi-minor axis length.
-    t (float): Angle parameter.
+    Args:
+        a (float): Semi-major axis of the ellipse.
+        b (float): Semi-minor axis of the ellipse.
+        n (int): The desired number of equidistant points.
 
     Returns:
-    float: Arc length from 0 to t.
+        numpy.ndarray: An array of shape (n, 2) containing the (x, y) coordinates
+                       of the approximately equidistant points.
     """
-    def integrand(theta):
-        return np.sqrt(a**2 * np.sin(theta)**2 + b**2 * np.cos(theta)**2)
-
-    length, _ = quad(integrand, 0, t)
-    return length
-
-def equidistant_points_on_ellipse(x_0,y_0,a, b,angle, num_points):
-    """
-    Find equidistant points on an ellipse based on arc length.
-
-    Parameters:
-    a (float): Semi-major axis length.
-    b (float): Semi-minor axis length.
-    num_points (int): Number of points to generate.
-
-    Returns:
-    list of tuples: List of (x, y) coordinates of the points.
-    """
-    total_length = ellipse_arc_length(a, b, 2 * np.pi)
-    segment_length = total_length / num_points
+    if a <= 0 or b <= 0 or n <= 0:
+        raise ValueError("Semi-axes (a, b) and number of points (n) must be positive.")
 
     points = []
-    current_length = 0
-    t = 0
+    perimeter_approx = np.pi * (3 * (a + b) - np.sqrt((3 * a + b) * (a + 3 * b)))  # Ramanujan's approximation
+    arc_length_increment = perimeter_approx / n
 
-    for _ in range(num_points):
-        # Find the angle t that corresponds to the current arc length
-        while True:
-            length = ellipse_arc_length(a, b, t)
-            if length >= current_length:
-                break
-            t += 0.001  # Small increment to find the correct t
+    theta = np.linspace(0, 2 * np.pi, 2000)  # More points for better arc length approximation
+    x = a * np.cos(theta)
+    y = b * np.sin(theta)
+    cumulative_arc_lengths = np.cumsum(np.sqrt(np.diff(x)**2 + np.diff(y)**2))
+    cumulative_arc_lengths = np.insert(cumulative_arc_lengths, 0, 0)  # Start with 0
 
-        x = a * np.cos(t)
-        y = b * np.sin(t)
-        point = (x, y)
+    target_arc_length = 0
+    current_point_index = 0
+    for _ in range(n):
+        while current_point_index < len(cumulative_arc_lengths) - 1 and \
+              cumulative_arc_lengths[current_point_index + 1] <= target_arc_length:
+            current_point_index += 1
+        point = None
+        if current_point_index < len(x):
+            point = (a * np.cos(theta[current_point_index]), b * np.sin(theta[current_point_index]))
+        else:
+            # Handle the case where we reach the end due to approximation
+            point = (a * np.cos(0), b * np.sin(0)) # Or the last point
+
+        target_arc_length += arc_length_increment
+
         point = (point[0] * math.cos(angle) + point[1] * math.sin(angle),
         -point[0] * math.sin(angle) + point[1] * math.cos(angle))
         point = (point[0] + x_0, point[1] + y_0)
         points.append(point)
-
-        current_length += segment_length
 
     return points
 
@@ -334,7 +323,7 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,debug=False):
         return None
     def sigmoid(z):
         return 1/(1 + np.exp(-z))
-    el_points = points_on_ellipse(x_0,y_0,a,b,angle,n_point_sample)
+    el_points = equidistant_ellipse_points(x_0,y_0,a,b,angle,n_point_sample)
     penalty = np.float64(0)
     prev_point = None
     prev_p_ell = None
