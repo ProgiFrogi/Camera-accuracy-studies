@@ -1,7 +1,8 @@
 import math
 import numpy as np
+from numba import jit
 
-
+#@jit
 def equidistant_ellipse_points(x_0, y_0, a, b,angle, n = 10):
     """
     Returns approximately n equidistant points on an ellipse.
@@ -19,14 +20,14 @@ def equidistant_ellipse_points(x_0, y_0, a, b,angle, n = 10):
         raise ValueError("Semi-axes (a, b) and number of points (n) must be positive.")
 
     points = []
-    perimeter_approx = np.pi * (3 * (a + b) - np.sqrt((3 * a + b) * (a + 3 * b)))  # Ramanujan's approximation
+    perimeter_approx = ellipse_perimeter_approximation(a,b)
     arc_length_increment = perimeter_approx / n
 
-    theta = np.linspace(0, 2 * np.pi, 2000)  # More points for better arc length approximation
+    theta = np.linspace(0, 2 * np.pi, 200*n)  # More points for better arc length approximation
     x = a * np.cos(theta)
     y = b * np.sin(theta)
     cumulative_arc_lengths = np.cumsum(np.sqrt(np.diff(x)**2 + np.diff(y)**2))
-    cumulative_arc_lengths = np.insert(cumulative_arc_lengths, 0, 0)  # Start with 0
+    cumulative_arc_lengths[0] = 0
 
     target_arc_length = 0
     current_point_index = 0
@@ -43,8 +44,8 @@ def equidistant_ellipse_points(x_0, y_0, a, b,angle, n = 10):
 
         target_arc_length += arc_length_increment
 
-        point = (point[0] * math.cos(angle) + point[1] * math.sin(angle),
-        -point[0] * math.sin(angle) + point[1] * math.cos(angle))
+        point = (point[0] * math.cos(angle) - point[1] * math.sin(angle),
+        point[0] * math.sin(angle) + point[1] * math.cos(angle))
         point = (point[0] + x_0, point[1] + y_0)
         points.append(point)
 
@@ -52,14 +53,14 @@ def equidistant_ellipse_points(x_0, y_0, a, b,angle, n = 10):
 
 
 
-
+#@jit
 def points_on_ellipse(x_0, y_0, a, b, angle, n: int = 10):
     points = list()
     for i in np.linspace(0, 2 * np.pi, n, endpoint=False):
         point = (math.cos(i), math.sin(i))
         point = (point[0] * a, point[1] * b)
-        point = (point[0] * math.cos(angle) + point[1] * math.sin(angle),
-                 -point[0] * math.sin(angle) + point[1] * math.cos(angle))
+        point = (point[0] * math.cos(angle) - point[1] * math.sin(angle),
+                 point[0] * math.sin(angle) + point[1] * math.cos(angle))
         point = (point[0] + x_0, point[1] + y_0)
         points.append(point)
     return points
@@ -149,6 +150,7 @@ def loss_by_points(x_0, y_0, a, b, angle, data, n: int = 20):
 
 from collections import deque
 
+#@jit
 def find_path(array, start, end, timeout=2000):
     """
     Find a path from start to end in a numpy array, moving only through non-zero elements.
@@ -203,6 +205,7 @@ def find_path(array, start, end, timeout=2000):
     # No path found
     return None
 
+#@jit
 def find_path_length(array, start, end,timeout=2000):
     """
     Find the length of the shortest path from start to end in a numpy array, 
@@ -255,7 +258,28 @@ def find_path_length(array, start, end,timeout=2000):
     # if timeout<=0:
     #     print("timeout")
     return None
+#@jit
+def ramanujan_(a, b):
+    h = ((a - b)/(a + b))**2
+    return math.pi * (a + b) * (1 + (3*h)/(10 + math.sqrt(4 - 3*h)))
 
+#@jit
+def cantrell_(a, b):
+    h = ((a - b)/(a + b))**2
+    coefs = [1,1/4,1/64,1/256,25/16384]
+    sum_pre_h= 0
+    mul = 1
+    for i in coefs:
+        sum_pre_h+=mul*i
+        mul*=h
+    return math.pi * (a + b) * sum_pre_h
+#@jit
+def simple_(a, b):
+    return 2 * math.pi * math.sqrt((a**2 + b**2)/2)
+#@jit
+def muir_(a, b):
+    return 2 * math.pi * ((a**1.5 + b**1.5)/2)**(1/1.5)
+#@jit
 def ellipse_perimeter_approximation(a, b):
     """
     Calculate approximation of ellipse perimeter.
@@ -273,74 +297,143 @@ def ellipse_perimeter_approximation(a, b):
     Returns:
         Approximate perimeter of the ellipse
     """
-    def ramanujan(a, b):
-        h = ((a - b)/(a + b))**2
-        return math.pi * (a + b) * (1 + (3*h)/(10 + math.sqrt(4 - 3*h)))
 
-    def cantrell(a, b):
-        h = ((a - b)/(a + b))**2
-        coefs = [1,1/4,1/64,1/256,25/16384]
-        sum_pre_h= 0
-        mul = 1
-        for i in coefs:
-            sum_pre_h+=mul*i
-            mul*=h
-        return math.pi * (a + b) * sum_pre_h
+    return cantrell_(a,b)
+import numpy as np
+from collections import deque
 
-    def simple(a, b):
-        return 2 * math.pi * math.sqrt((a**2 + b**2)/2)
+def find_nearest_one_manhattan_optimized(grid):
+    """
+    Finds the nearest '1' for each point in a 2D array using an optimized
+    approach based on Breadth-First Search (BFS) with Manhattan distance.
 
-    def muir(a, b):
-        return 2 * math.pi * ((a**1.5 + b**1.5)/2)**(1/1.5)
-    return cantrell(a,b)
+    Args:
+        grid (np.ndarray): A 2D bool NumPy array .
 
-    
+    Returns:
+        np.ndarray: A 2D NumPy array of the same shape as the input grid,
+                      where each element represents the Manhattan distance to the
+                      nearest '1'.
+    """
+    rows, cols = grid.shape
+    distance_grid = np.full_like(grid, -1, dtype=int)  # Initialize with -1
+    nearest_grid = np.ones((grid.shape[0],grid.shape[1],2),dtype=int)*(-1)
+    queue = deque()
 
-def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,debug=False):
+    # Initialize the queue with all the '1's and set their distance to 0
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r, c]:
+                distance_grid[r, c] = 0
+                queue.append((r, c, 0))  # (row, col, distance)
+                nearest_grid[r,c] = np.array([r,c])
+
+    # Perform BFS
+    while queue:
+        r, c, dist = queue.popleft()
+
+        # Explore adjacent cells (up, down, left, right)
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            nr, nc = r + dr, c + dc
+
+            # Check if the new cell is within the grid boundaries and hasn't been visited
+            if 0 <= nr < rows and 0 <= nc < cols and distance_grid[nr, nc] == -1:
+                distance_grid[nr, nc] = dist + 1
+                queue.append((nr, nc, dist + 1))
+                nearest_grid[nr,nc] = nearest_grid[r,c]
+
+    return distance_grid,nearest_grid
+#@jit
+def search_point_(point,data,max_rad=5):#max search pixel distance
+    point = point.astype(int)
+    points = [(0,0)]
+    for distance in range(1, max_rad + 1):
+        # Generate all possible points at the current Manhattan distance
+        for dx in range(-distance, distance + 1):
+            dy = distance - abs(dx)
+            if dy >0:
+                for sign in [-1, 1]:
+                    x = dx
+                    y = sign * dy
+                    points.append((x, y))
+            else:
+                points.append((dx,0))
+    points = np.array(points)+point
+
+    for x,y in points:
+            if 0 < y < data.shape[1] and 0 < x < data.shape[0]:
+                if data[x][y] > 0:
+                    return np.array([x,y])
+    return None
+
+def sigmoid_(z):
+    return 1/(1 + np.exp(-z))
+#@jit
+def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,debug=False,max_rad=50):
     """
     for each pixel of image that intersects our ellipse we search for nearest white pixel(top k?). then we search white distance between this pixel and previous.
     if there is no white length,then distance is x.
     if there is no white point in radius y, then we add z to metric
     after calculation, we divide sum by ellipse perimeter and apply sigmoid to result: we want to allow some error, i.e. if there is no half of ellipse it is ok if other half is an ellipse, but if it found ellipses on lines we want to strike metric hard for this error
     """
-    n_point_sample = 1000
+    n_point_sample = max(1000,int(a+b)*4)
 
     if data is None or len(data.shape)!=2:
         raise RuntimeError(f"wrong image shape: should be (.,.) but it is {data.shape}")
     if a==0 or b ==0:
         return 0
-    def search_point(point,data,max_rad=5):#max search pixel distance
-        point = point.astype(int)
-        for r in range(10):
-            for y in [max(0,-r+point[1]),min(data.shape[1]-1,r+1+point[1])]:
-                for x in range(max(0,-r+point[0]),min(data.shape[0]-1,r+1+point[0])):
-                    if data[x][y] !=0:
-                        return np.array([x,y])
-            for x in [max(0,-r+point[0]),min(data.shape[0]-1,r+1+point[0])]:
-                for x in range(max(0,-r+point[1]),min(data.shape[1]-1,r+1+point[1])):
-                    if data[x][y] != 0:
-                        return np.array([x,y])
-        return None
-    def sigmoid(z):
-        return 1/(1 + np.exp(-z))
+
     el_points = equidistant_ellipse_points(x_0,y_0,a,b,angle,n_point_sample)
-    penalty = np.float64(0)
+    penalty = 0
     prev_point = None
     prev_p_ell = None
     no_nearest = 0
     no_distance = 0
-    for point in el_points:
-        point = np.array(point).astype(int)
-        if (point==prev_p_ell).all():
+    non_distinct_nearest_cnt = 0
+    non_distinct_nearest_cnt_tmp = 0
+    cluster_cntr = 0
+    sum_distances = 0
+    if debug:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.scatter(np.array(el_points)[:, 0], np.array(el_points)[:, 1], color='red')
+        plt.xlim(0, 700)
+        plt.ylim(0,700)
+        plt.gca().invert_yaxis()
+        plt.xlabel('x')
+        plt.ylabel('y')
+    for point_t in el_points:
+        point = np.array(point_t,dtype=np.int32)
+        if prev_p_ell is not None and (point==prev_p_ell).all():
+            n_point_sample-=1
             continue
-        current_point = search_point(point,data)
+        if debug:
+            if prev_p_ell is not None:
+                if np.sum(np.abs(point-prev_p_ell))>2:
+                    print("-"*100,"probably bad")
+        current_point = None
+        if help_nearest is None:
+            current_point = search_point_(point,data,max_rad=max_rad)
+        else:
+            current_point = help_nearest[point[0],point[1]]
+            if np.sum(np.abs(current_point-point))>max_rad:
+                print("bad: lenght too big: ",np.sum(np.abs(current_point-point)))
+                current_point = None
+            else:
+                sum_distances+=np.sum(np.abs(current_point-point))
+        if current_point is not None and prev_point is not None and (current_point == prev_point).all():
+            non_distinct_nearest_cnt_tmp+=1
+        elif non_distinct_nearest_cnt_tmp>0:
+            non_distinct_nearest_cnt+=non_distinct_nearest_cnt_tmp
+            cluster_cntr+=1
+            non_distinct_nearest_cnt_tmp=0
+        if current_point is None:
+            no_nearest+=1
         if prev_point is None:
-            if current_point is None:
-                no_nearest+=1
             pass
         elif current_point is None:
             # penalty+=4*np.sum(np.abs(prev_p_ell-point))
-            no_nearest+=1
+            pass
             # print("bad, not found")
         else:
             distance = find_path_length(data,tuple(current_point),tuple(prev_point))
@@ -357,14 +450,86 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,debug=False):
         # print(penalty/((a+b)*4))
         if current_point is not None:
             penalty+=np.linalg.norm(point-current_point)
+        prev_p_ell = point.copy()
+        if current_point is not None:
+            prev_point = current_point
+    # print(penalty/((a+b)*4))
+    # return 1-sigmoid(penalty/((a+b)*4)-1)
+    if debug:
+        print(f"x:{x_0},y:{y_0},a{a},b{b},no_nearest%: {no_nearest/n_point_sample}, no_distance%: {no_distance/n_point_sample}, cluster_cntr%: {cluster_cntr/n_point_sample},avg distance: {float("inf") if (n_point_sample-no_distance-no_nearest == 0)  else sum_distances/(n_point_sample-no_distance-no_nearest)},penalty/((a+b)*4): {penalty/((a+b)*4)} ")
+    
+    if (n_point_sample-no_distance-no_nearest == 0):
+        return -100
+
+    if no_nearest/n_point_sample>0.6 or cluster_cntr/n_point_sample<0.01:
+        if debug:
+            print("not enough points")
+        return -float("inf")
+    return 1/(1+((penalty/((a+b)*4))+(10*no_nearest/n_point_sample)**3+(5*no_distance/n_point_sample)**3)+(10*(1-cluster_cntr/n_point_sample))**3)
+
+
+
+def metric_by_near_segments_base_by_direction(x_0, y_0, a, b, angle, data,debug=False):
+    """
+    for each pixel of image that intersects our ellipse we search for nearest white pixel(top k?). then we search white distance between this pixel and previous.
+    if there is no white length,then distance is x.
+    if there is no white point in radius y, then we add z to metric
+    after calculation, we divide sum by ellipse perimeter and apply sigmoid to result: we want to allow some error, i.e. if there is no half of ellipse it is ok if other half is an ellipse, but if it found ellipses on lines we want to strike metric hard for this error
+    """
+    n_point_sample = min(1000,int(a+b)*4)
+
+    if data is None or len(data.shape)!=2:
+        raise RuntimeError(f"wrong image shape: should be (.,.) but it is {data.shape}")
+    if a==0 or b ==0:
+        return 0
+
+    el_points = equidistant_ellipse_points(x_0,y_0,a,b,angle,n_point_sample)
+    penalty = np.float64(0)
+    prev_point = None
+    prev_p_ell = None
+    no_nearest = 0
+    no_distance = 0
+    distinct_nearest_cnt = 0
+    sum_distances = 0
+    for point in el_points:
+        point = np.array(point).astype(int)
+        if (point==prev_p_ell).all():
+            n_point_sample-=1
+            continue
+        current_point = search_point_(point,data,max_rad=20)
+        if prev_point is None:
+            if current_point is None:
+                no_nearest+=1
+            pass
+        elif current_point is None:
+            # penalty+=4*np.sum(np.abs(prev_p_ell-point))
+            no_nearest+=1
+            # print("bad, not found")
+        else:
+            distance = find_path_length(data,tuple(current_point),tuple(prev_point))
+            sum_distances+=distance
+            # print(distance)
+            if distance is None:
+                # penalty+=2*np.sum(np.abs(prev_p_ell-point))
+                no_distance+=1
+            else:
+                # print(point,current_point)
+                # print(np.abs(np.sum(np.abs(prev_p_ell-point))-np.sum(np.abs(prev_point-current_point))))
+                # print(np.abs(np.sum(np.abs(prev_p_ell-point))-float(distance)))
+                first = prev_p_ell-point
+                second = prev_point-current_point
+                penalty+=np.sqrt(np.abs(first[0]*second[1]-first[1]*second[0]))
+        # print(penalty/((a+b)*4))
+        if current_point is not None:
+            penalty+=np.linalg.norm(point-current_point)
         prev_p_ell = point
         if current_point is not None:
             prev_point = current_point
     # print(penalty/((a+b)*4))
     # return 1-sigmoid(penalty/((a+b)*4)-1)
     if debug:
-        print(f"no_nearest/n_point_sample: {no_nearest/n_point_sample}, no_distance/n_point_sample: {no_distance/n_point_sample},penalty/((a+b)*4): {penalty/((a+b)*4)} ")
-    if no_nearest/n_point_sample>0.8:
+        print(f"no_nearest/n_point_sample: {no_nearest/n_point_sample}, no_distance/n_point_sample: {no_distance/n_point_sample}, avg distance: {sum_distances/(n_point_sample-no_distance-no_nearest)},penalty/((a+b)*4): {penalty/((a+b)*4)} ")
+    if no_nearest/n_point_sample>0.6:
         return -float("inf")
     return -(penalty/((a+b)*4))-675*(no_nearest/n_point_sample)**3-125*(no_distance/n_point_sample)**3
 
