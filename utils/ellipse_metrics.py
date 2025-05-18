@@ -435,7 +435,7 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,d
     for point_t in el_points:
         point = np.array(point_t,dtype=np.int32)
         # point = np.flip(point)
-        if prev_p_ell is not None and (point==prev_p_ell).all():
+        if prev_p_ell is not None and (point==prev_p_ell).all() or (point<0).any() or (point>=data.shape[0]).any():
             n_point_sample-=1
             continue
         if debug:
