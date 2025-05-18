@@ -368,6 +368,33 @@ def search_point_(point,data,max_rad=5):#max search pixel distance
 
 def sigmoid_(z):
     return 1/(1 + np.exp(-z))
+
+def calculate_manhattan_distances(nearest_points_array):
+    """
+    Calculate the Manhattan distance for each cell to its nearest point using vectorized operations.
+
+    Parameters:
+    nearest_points_array (np.array): 2D array where each element is the coordinates of the nearest point.
+
+    Returns:
+    np.array: 2D array of Manhattan distances.
+    """
+    # Create a grid of indices
+    i_indices, j_indices = np.indices(nearest_points_array.shape[:2])
+
+    # Extract the nearest point coordinates
+    nearest_i = nearest_points_array[..., 0]
+    nearest_j = nearest_points_array[..., 1]
+
+    # Calculate the absolute differences
+    abs_diff_i = np.abs(i_indices - nearest_i)
+    abs_diff_j = np.abs(j_indices - nearest_j)
+
+    # Sum the absolute differences to get the Manhattan distance
+    distances = abs_diff_i + abs_diff_j
+
+    return distances
+
 #@jit
 def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,debug=False,max_rad=50):
     """
@@ -393,7 +420,10 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,d
     non_distinct_nearest_cnt_tmp = 0
     cluster_cntr = 0
     sum_distances = 0
-    if debug:
+    seen_points = []
+    seen_p_values = []
+    nearest_points = []
+    if debug and False:
         import matplotlib.pyplot as plt
         plt.figure()
         plt.scatter(np.array(el_points)[:, 0], np.array(el_points)[:, 1], color='red')
@@ -404,10 +434,12 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,d
         plt.ylabel('y')
     for point_t in el_points:
         point = np.array(point_t,dtype=np.int32)
+        # point = np.flip(point)
         if prev_p_ell is not None and (point==prev_p_ell).all():
             n_point_sample-=1
             continue
         if debug:
+            seen_points.append(point)
             if prev_p_ell is not None:
                 if np.sum(np.abs(point-prev_p_ell))>2:
                     print("-"*100,"probably bad")
@@ -415,9 +447,14 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,d
         if help_nearest is None:
             current_point = search_point_(point,data,max_rad=max_rad)
         else:
-            current_point = help_nearest[point[0],point[1]]
+            current_point = np.flip(help_nearest[tuple(np.flip(point))])
+            # current_point = np.flip(current_point)
+            # current_point = np.array([help_nearest[point[0],point[1]][1],help_nearest[point[0],point[1]][0]])
+            seen_p_values.append(np.sum(np.abs(current_point-point)))
+            nearest_points.append(current_point)
             if np.sum(np.abs(current_point-point))>max_rad:
-                print("bad: lenght too big: ",np.sum(np.abs(current_point-point)))
+                if debug and False:
+                    print("bad: lenght too big: ",np.sum(np.abs(current_point-point)))
                 current_point = None
             else:
                 sum_distances+=np.sum(np.abs(current_point-point))
@@ -429,13 +466,7 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,d
             non_distinct_nearest_cnt_tmp=0
         if current_point is None:
             no_nearest+=1
-        if prev_point is None:
-            pass
-        elif current_point is None:
-            # penalty+=4*np.sum(np.abs(prev_p_ell-point))
-            pass
-            # print("bad, not found")
-        else:
+        if prev_point is not None and current_point is not None:
             distance = find_path_length(data,tuple(current_point),tuple(prev_point))
             # print(distance)
             if distance is None:
@@ -456,8 +487,18 @@ def metric_by_near_segments_base(x_0, y_0, a, b, angle, data,help_nearest=None,d
     # print(penalty/((a+b)*4))
     # return 1-sigmoid(penalty/((a+b)*4)-1)
     if debug:
-        print(f"x:{x_0},y:{y_0},a{a},b{b},no_nearest%: {no_nearest/n_point_sample}, no_distance%: {no_distance/n_point_sample}, cluster_cntr%: {cluster_cntr/n_point_sample},avg distance: {float("inf") if (n_point_sample-no_distance-no_nearest == 0)  else sum_distances/(n_point_sample-no_distance-no_nearest)},penalty/((a+b)*4): {penalty/((a+b)*4)} ")
-    
+        print(f"x:{x_0},y:{y_0},a{a},b{b},no_nearest%: {no_nearest/n_point_sample}, no_distance%: {no_distance/n_point_sample}, cluster_cntr%: {cluster_cntr/n_point_sample},avg distance: {float("inf") if (n_point_sample-no_distance-no_nearest == 0)  else sum_distances/(n_point_sample-no_distance-no_nearest)},penalty/((a+b)*4): {penalty/((a+b)*4)} max_rad: {max_rad}")
+    if debug:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.imshow(calculate_manhattan_distances(help_nearest))
+        plt.scatter(x=np.array(seen_points)[:, 0], y=np.array(seen_points)[:, 1],c=np.ma.masked_array(np.array(seen_p_values),mask=(np.array(seen_p_values)<45)))
+        plt.scatter(x=np.array(nearest_points)[:, 0], y=np.array(nearest_points)[:, 1],c='red')
+        plt.xlim(0, 700)
+        plt.ylim(0,700)
+        plt.gca().invert_yaxis()
+        plt.xlabel('x')
+        plt.ylabel('y')
     if (n_point_sample-no_distance-no_nearest == 0):
         return -100
 
