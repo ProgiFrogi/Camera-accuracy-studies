@@ -32,8 +32,8 @@ class TestHorizonPointE2E(unittest.TestCase):
 
     def test_3_segments(self):
         """Test three segments."""
-        segments = [np.array([[0, 0], [0,1]]), np.array([[1, 0], [-0.5, 1]]), np.array([[-1, 0], [0.5, 1]])]
-        eps = 0.3
+        segments = [np.array([[0, 0], [0,100]]), np.array([[100, 0], [-50, 100]]), np.array([[-100, 0], [50, 100]])]
+        eps = 0.001
         val, point, segs = get_horizon_point(segments, eps)
         self.assertEqual(val, 3, "Expected three segments")
         self.assertEqual(segs, {0, 1, 2}, "Expected all segment IDs")

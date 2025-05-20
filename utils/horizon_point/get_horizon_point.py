@@ -138,7 +138,7 @@ class line:
             return point_id + 1
         elif np.dot(self.direction,current-prev)<0:
             return point_id - 1
-        raise Exception("no appropriate direction found")
+        raise Exception(f"no appropriate direction found for line with {self.center}+{self.direction}*t and point with id: {point_id} and prev:{prev}")
 
     def should_add(self, from_point_id, to_point_id):
         """Check if a segment between two points should be included based on rotation and geometry.
@@ -157,7 +157,9 @@ class line:
         # return cross2d(self.get_point(to_point_id)-self.get_point(from_point_id),self.direction)>0
 
     def should_add_point(self, point):
-        """Check if a point should be added as if it were the previous point in a convex hull.
+        """Check if a point should be added, i.e. if this point in a cone for a segment, this line is part of.
+        Returns true if this statement does not contradicts with this line.
+        Point still may contradict another line of segment.
 
         Args:
             point (np.ndarray): 2D point to evaluate.
@@ -236,11 +238,128 @@ def intersect(a: line, b: line) -> np.ndarray:
     return res
 
 
+def lines_from_segment_(segment,eps,segment_id):
+    """
+    returns lines generated from segment which are restrictions on where point for this segment may occur.
+    note that there may be no restrictions.
+    """
+    center = (segment[0] + segment[1]) / 2
+    from math import asin, sin, cos
+    direction = segment[0] - segment[1]
+    if eps > (np.linalg.norm(direction) / np.sqrt(8)):
+        eps = np.linalg.norm(direction) / np.sqrt(8)
+    angle = asin(eps / (np.linalg.norm(direction) / 2))
+    direction_y = np.linalg.norm(direction) / 2 * cos(angle) * sin(angle)
+    direction_x = np.linalg.norm(direction) / 2 * (cos(angle) * cos(angle)) #same as 1-sin(angle)*sin(angle), but probably easier to understand
+    direction /= np.linalg.norm(direction)
+    direction_ort = np.array([direction[1], -direction[0]])
+    answer = list()
+    for j in [-1, 1]:
+        line_dir = direction * direction_x + direction_ort * direction_y * j
+        answer.append(
+            line(center, line_dir, np.sign(cross2d(line_dir, direction) * np.dot(line_dir, direction)), segment_id))
+    return answer
+
+def next_point_(previous_point_id, current_point_id, current_line_id,lines):
+    """Find the next point in the convex hull traversal.
+
+    Args:
+        previous_point_id (int): Index of the previous point.
+        current_point_id (int): Index of the current point.
+        current_line_id (int): ID of the current line.
+
+    Returns:
+        tuple or None: (prev_id, next_id, next_line_id) for the next point, or None if no next point exists.
+    """
+    if current_point_id >= lines[current_line_id].get_point_len() or current_point_id < 0:
+        return None
+    next_line_id = lines[current_line_id].get_other_line(current_point_id)
+    other_id = lines[next_line_id].get_point_id(lines[current_line_id].get_point(current_point_id))
+    # assert(np.linalg.norm(lines[next_line_id].get_point(other_id)-lines[current_line_id].get_point(current_point_id))<1e5)
+    next_id = lines[next_line_id].next_point_rot(other_id, lines[current_line_id].get_point(previous_point_id))
+    # assert(cross2d(lines[next_line_id].get_point(other_id)-lines[current_line_id].get_point(previous_point_id),
+    #                 lines[next_line_id].get_point(next_id)-lines[next_line_id].get_point(other_id))
+    #         >0)
+    return (other_id, next_id, next_line_id)
+
+def get_segment_(point1, point2, line_id,lines,segments_to_visit,segments,eps, write_lines=False):
+    """Compute properties of a convex hull segment, including area and intersecting segments.
+
+    Args:
+        point1 (int): Index of the starting point.
+        point2 (int): Index of the ending point.
+        line_id (int): ID of the line.
+        write_lines (bool): If True, return the set of segment IDs; otherwise, omit.
+        lines list[line]: list of lines
+        segments_to_visit: something which supports operator "in" and method "remove" and contains triplets of (point_from_id,point_to_id,line_id). need to be changed in function.
+
+    Returns:
+        tuple: (value, area, avg_point, [line_ids])
+            - value (int): Number of segments intersecting in the hull.
+            - area (float): Area of the convex hull (or inf if open).
+            - avg_point (np.ndarray): Average point of the hull vertices.
+            - line_ids (set, optional): IDs of segments in the hull (if write_lines=True).
+    """
+    avg_point = lines[line_id].get_point(point1)
+    avg_cnt = 1
+    area = 0
+    # area = cross2d(lines[line_id].get_point(point1),lines[line_id].get_point(point2)-lines[line_id].get_point(point1))
+    while True:# going through hull and counting avg point and area
+        avg_point += lines[line_id].get_point(point2)
+        area += cross2d(lines[line_id].get_point(point1),
+                        lines[line_id].get_point(point2) - lines[line_id].get_point(point1))
+        avg_cnt += 1
+        if (point1, point2, line_id) not in segments_to_visit:
+            break
+        segments_to_visit.remove((point1, point2, line_id))
+        nxt = next_point_(point1, point2, line_id,lines)
+        if nxt is None:
+            area = float('inf')
+            break
+        point1, point2, line_id = nxt
+    avg_point /= avg_cnt
+    line_ids = set() 
+    for seg_id,segment in enumerate(segments):# just to make code faster and simpler for understanding
+        should_add = True
+        for j in lines_from_segment_(segment,eps,seg_id):
+            if not j.should_add_point(avg_point):
+                should_add = False
+        if should_add:
+            line_ids.add(seg_id)
+    if not write_lines:
+        return (len(line_ids), area, avg_point)
+    else:
+        return (len(line_ids), area, avg_point, line_ids)
+
+def get_lines_and_structure_(segments,eps):
+    lines: list[line] = list()
+    for segment_id, segment in enumerate(segments):
+        lines.extend(lines_from_segment_(segment,eps,segment_id))
+    for i in range(len(lines)):
+        for j in range(i + 1, len(lines)):
+            if np.abs(cross2d(lines[i].direction, lines[j].direction)) < 1e-6:
+                continue
+            point = intersect(lines[i], lines[j])
+            lines[i].add_point(point, j)
+            lines[j].add_point(point, i)
+    for j in range(len(lines)):
+        lines[j].sort_points()
+    segments_to_visit = set()
+    start_segments = list()
+    for i in range(len(lines)):
+        for j in range(-1, lines[i].get_point_len()):
+            segments_to_visit.add((j, j + 1, i))
+            segments_to_visit.add((j + 1, j, i))
+        start_segments.append([-1, 0, i])
+        start_segments.append([lines[i].get_point_len(), lines[i].get_point_len() - 1, i])
+    return lines, segments_to_visit, start_segments
+
+
 def get_horizon_point(segments, eps):
     """Find the best horizon point where the largest subset of segments can intersect within a given tolerance.
 
     This function identifies a point (horizon point) where the maximum number of line segments, when extended
-    within a tolerance `eps`, can converge. It runs in O(n) time, where n is the number of segments.
+    within a tolerance `eps`, can converge. It runs in O(n**3) time, where n is the number of segments.
 
     Args:
         segments (list): List of segments, where each segment is a numpy array of two 2D points [[x1, y1], [x2, y2]].
@@ -253,174 +372,79 @@ def get_horizon_point(segments, eps):
             - segments_set (set): Set of segment IDs that intersect at the horizon point.
 
     Note:
-        If `eps` exceeds half the length of a segment, it is adjusted to 99% of that length to ensure numerical stability.
+        If `eps` exceeds half the length of a segment, it is adjusted to 1/sqrt(8) of that length to ensure numerical stability.
     """
-    lines: list[line] = list()
     segments = np.array(segments).astype(np.float64)
-    iterator = -1
-    for i in segments:
-        iterator += 1
-        center = (i[0] + i[1]) / 2
-        from math import asin, sin, cos
-        direction = i[0] - i[1]
-        if eps > (np.linalg.norm(direction) / 2):
-            eps = np.linalg.norm(direction) / 2 * 0.99
-        angle = asin(eps / (np.linalg.norm(direction) / 2))
-        direction_y = np.linalg.norm(direction) / 2 * cos(angle) * sin(angle)
-        direction_x = np.linalg.norm(direction) / 2 * (1 - sin(angle) * sin(angle))
-        direction /= np.linalg.norm(direction)
-        direction_ort = np.array([direction[1], -direction[0]])
-        for j in [-1, 1]:
-            line_dir = direction * direction_x + direction_ort * direction_y * j
-            lines.append(
-                line(center, line_dir, np.sign(cross2d(line_dir, direction) * np.dot(line_dir, direction)), iterator))
-    # segs_from_points = dict()
-    for i in range(len(lines)):
-        for j in range(i + 1, len(lines)):
-            if np.abs(cross2d(lines[i].direction, lines[j].direction)) < 1e-6:
-                continue
-            point = intersect(lines[i], lines[j])
-            lines[i].add_point(point, j)
-            lines[j].add_point(point, i)
-            # print(np.linalg.norm(lines[i].direction))
-            # print()
-            # print(np.dot(lines[i].direction,point-lines[i].center)*lines[i].direction+lines[i].center - point)
-            # print(cross2d(lines[i].direction,point-lines[i].center))
-            # print(lines[i].get_point(lines[i].get_point_len()-1)-point)
-            # print(lines[j].get_point(lines[j].get_point_len()-1)-point)
-            # segs_from_points[point] = [lines[i],lines[j]]
-    for j in range(len(lines)):
-        lines[j].sort_points()
-        # print(lines[j].other_lines_ids)
-    segments_to_visit = set()
-    start_segments = list()
-    for i in range(len(lines)):
-        for j in range(-1, lines[i].get_point_len()):
-            segments_to_visit.add((j, j + 1, i))
-            segments_to_visit.add((j + 1, j, i))
-            if j == -1:
-                start_segments.append([j, j + 1, i])
-            if j == lines[i].get_point_len() - 1:
-                start_segments.append([j + 1, j, i])
+    lines, segments_to_visit, start_segments = get_lines_and_structure_(segments,eps)
 
-    # print(lines,segments_to_visit,start_segments)
 
-    def next_point(previous_point_id, current_point_id, current_line_id):
-        """Find the next point in the convex hull traversal.
+    best_val = 0 # number of segments corresponding to point
+    best_point = np.array([0, 0])
+    best_segs = set()
+    best_area = 0
+    for i in start_segments:
+        val, area, point, segs = get_segment_(i[0], i[1], i[2],lines,segments_to_visit,segments,eps, True)
+        if val > best_val or (val == best_val and area > best_area):
+            best_val = val
+            best_point = point
+            best_area = area
+            best_segs = segs
+    while len(segments_to_visit) > 0:
+        i = None
+        for j in segments_to_visit:
+            i = j
+            break
+        val, area, point, segs = get_segment_(i[0], i[1], i[2],lines,segments_to_visit,segments,eps, True)
+        if val > best_val or (val == best_val and area > best_area):
+            best_val = val
+            best_point = point
+            best_area = area
+            best_segs = segs
 
-        Args:
-            previous_point_id (int): Index of the previous point.
-            current_point_id (int): Index of the current point.
-            current_line_id (int): ID of the current line.
+    return (best_val, best_point, best_segs)
 
-        Returns:
-            tuple or None: (prev_id, next_id, next_line_id) for the next point, or None if no next point exists.
-        """
-        if current_point_id >= lines[current_line_id].get_point_len() or current_point_id < 0:
-            return None
-        next_line_id = lines[current_line_id].get_other_line(current_point_id)
-        other_id = lines[next_line_id].get_point_id(lines[current_line_id].get_point(current_point_id))
-        # assert(np.linalg.norm(lines[next_line_id].get_point(other_id)-lines[current_line_id].get_point(current_point_id))<1e5)
-        next_id = lines[next_line_id].next_point_rot(other_id, lines[current_line_id].get_point(previous_point_id))
-        # assert(cross2d(lines[next_line_id].get_point(other_id)-lines[current_line_id].get_point(previous_point_id),
-        #                 lines[next_line_id].get_point(next_id)-lines[next_line_id].get_point(other_id))
-        #         >0)
-        return (other_id, next_id, next_line_id)
 
-    def get_segment(point1, point2, line_id, write_lines=False):
-        """Compute properties of a convex hull segment, including area and intersecting segments.
+def cluster_segments(segments,eps):
+    """Cluster segments by their points: each line present in only one cluster
+    in "for" gets all convex hulls, then make them disjoint, beginning from biggest to smallest
+    Returns:
+        list[tuple(set[segment_ids],point)]
+    """
 
-        Args:
-            point1 (int): Index of the starting point.
-            point2 (int): Index of the ending point.
-            line_id (int): ID of the line.
-            write_lines (bool): If True, return the set of segment IDs; otherwise, omit.
-
-        Returns:
-            tuple: (value, area, avg_point, [line_ids])
-                - value (int): Number of segments intersecting in the hull.
-                - area (float): Area of the convex hull (or inf if open).
-                - avg_point (np.ndarray): Average point of the hull vertices.
-                - line_ids (set, optional): IDs of segments in the hull (if write_lines=True).
-        """
-        avg_point = lines[line_id].get_point(point1)
-        avg_cnt = 1
-        line_ids = set()
-        area = 0
-        # area = cross2d(lines[line_id].get_point(point1),lines[line_id].get_point(point2)-lines[line_id].get_point(point1))
-        # print("start")
-        while True:
-            # print(point1,point2,line_id)
-            avg_point += lines[line_id].get_point(point2)
-            area += cross2d(lines[line_id].get_point(point1),
-                            lines[line_id].get_point(point2) - lines[line_id].get_point(point1))
-            avg_cnt += 1
-            if (point1, point2, line_id) not in segments_to_visit:
-                # print("closed")
+    segments = np.array(segments).astype(np.float64)
+    lines, segments_to_visit, start_segments = get_lines_and_structure_(segments,eps)
+    clusters = list()
+    for i in start_segments:
+        val, area, point, segs = get_segment_(i[0], i[1], i[2],lines,segments_to_visit,segments,eps, True)
+        clusters.append((segs,point))
+    while len(segments_to_visit) > 0:
+        i = None
+        for j in segments_to_visit:
+            i = j
+            break
+        val, area, point, segs = get_segment_(i[0], i[1], i[2],lines,segments_to_visit,segments,eps, True)
+        clusters.append((segs,point))
+    
+    clusters = sorted(clusters, key=lambda x: -len(x[0]))
+    disjoint_cnt = 0
+    start_id = 0
+    while disjoint_cnt<len(segments):
+        non_zero_len = 0
+        for i in range(start_id+1,len(clusters)):
+            if len(clusters[i][0])==0:
                 break
-            segments_to_visit.remove((point1, point2, line_id))
-            nxt = next_point(point1, point2, line_id)
-            if lines[line_id].should_add(point1, point2):
-                # print("added")
-                line_ids.add(lines[line_id].internal_id)
-            if nxt is None:
-                # print("open")
-                area = float('inf')
-                break
-            point1, point2, line_id = nxt
-        # print(len(line_ids))
-        value = 0 # number of segments that intersected in this convex hull
-        avg_point /= avg_cnt
-        tmp_set = set()
-        line_ids = set()
-        for i in range(len(lines)):
-            if lines[i].should_add_point(avg_point):
-                if lines[i].internal_id in tmp_set:
-                    value += 1
-                    line_ids.add(lines[i].internal_id)
-                else:
-                    tmp_set.add(lines[i].internal_id)
-        if not write_lines:
-            return (value, area, avg_point)
-        else:
-            return (value, area, avg_point, line_ids)
+            for j in clusters[start_id][0]:
+                if j in clusters[i][0]:
+                    clusters[i][0].remove(j)
+            if len(clusters[i][0])>0:
+                non_zero_len+=1
+        clusters[start_id+1:] = sorted(clusters[start_id+1:], key=lambda x: -len(x[0]))
+        disjoint_cnt+=len(clusters[start_id][0])
+        clusters = clusters[:non_zero_len+start_id+1]
+        start_id+=1
+    return clusters
 
-    def get_best_point():
-        """Find the best horizon point by evaluating all possible convex hulls.
 
-        Returns:
-            tuple: (best_val, best_point, best_segs)
-                - best_val (int): Maximum number of intersecting segments.
-                - best_point (np.ndarray): 2D coordinates of the best horizon point.
-                - best_segs (set): IDs of segments intersecting at the best point.
-        """
-        best_val = 0
-        best_id = [0, 0, 0]
-        best_point = np.array([0, 0])
-        best_segs = set()
-        best_area = 0
-        for i in start_segments:
-            val, area, point, segs = get_segment(i[0], i[1], i[2], True)
-            if val > best_val or (val == best_val and area > best_area):
-                best_val = val
-                best_point = point
-                best_area = area
-                best_segs = segs
-        while len(segments_to_visit) > 0:
-            i = None
-            for j in segments_to_visit:
-                i = j
-                break
-            val, area, point, segs = get_segment(i[0], i[1], i[2], True)
-            if val > best_val or (val == best_val and area > best_area):
-                best_val = val
-                best_point = point
-                best_area = area
-                best_segs = segs
-
-        return (best_val, best_point, best_segs)
-
-    return get_best_point()
 
 def cross2d(x, y):
     return np.array([x[..., 0] * y[..., 1] - x[..., 1] * y[..., 0]])
