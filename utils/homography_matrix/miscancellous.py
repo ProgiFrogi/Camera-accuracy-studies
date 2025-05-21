@@ -42,7 +42,7 @@ def homography_scale_s(scale):
 
 def homography_rotate(angle):
     """
-    rotates image by angle
+    rotates image by angle (radians)
     """
     c, s = np.cos(angle), np.sin(angle)
     return np.array([[c,-s,0],[s,c,0],[0,0,1]])
